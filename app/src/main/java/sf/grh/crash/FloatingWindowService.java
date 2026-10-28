@@ -18,6 +18,9 @@ import android.view.WindowManager;
 
 public class FloatingWindowService extends Service {
 
+    private static final int NOTIFICATION_ID = 1001;
+    private static final String CHANNEL_ID = "floating_overlay_channel";
+
     private WindowManager windowManager;
     private View floatingCircle;
     private WindowManager.LayoutParams params;
@@ -35,12 +38,19 @@ public class FloatingWindowService extends Service {
 
         startAsForegroundService();
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && !android.provider.Settings.canDrawOverlays(this)) {
+            stopSelf();
+            return;
+        }
+
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         floatingCircle = new View(this);
         floatingCircle.setBackground(createCircle());
 
         int overlayType;
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             overlayType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         } else {
@@ -65,18 +75,19 @@ public class FloatingWindowService extends Service {
                 new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override
                     public boolean onScale(ScaleGestureDetector detector) {
-                        circleSize = Math.max(50, Math.min(220,
-                                (int) (circleSize * detector.getScaleFactor())));
+                        circleSize = Math.max(
+                                50,
+                                Math.min(
+                                        220,
+                                        (int) (circleSize
+                                                * detector.getScaleFactor())
+                                )
+                        );
 
                         params.width = circleSize;
                         params.height = circleSize;
 
-                        try {
-                            if (floatingCircle != null && floatingCircle.isAttachedToWindow()) {
-                                windowManager.updateViewLayout(floatingCircle, params);
-                            }
-                        } catch (Exception ignored) {
-                        }
+                        updateCirclePosition();
                         return true;
                     }
                 }
@@ -94,15 +105,19 @@ public class FloatingWindowService extends Service {
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
-                    if (event.getPointerCount() == 1 && !scaleDetector.isInProgress()) {
-                        params.x = initialX + (int) (event.getRawX() - initialTouchX);
-                        params.y = initialY + (int) (event.getRawY() - initialTouchY);
+                    if (event.getPointerCount() == 1
+                            && !scaleDetector.isInProgress()) {
+                        params.x = initialX
+                                + (int) (event.getRawX() - initialTouchX);
+                        params.y = initialY
+                                + (int) (event.getRawY() - initialTouchY);
 
-                        try {
-                            windowManager.updateViewLayout(floatingCircle, params);
-                        } catch (Exception ignored) {
-                        }
+                        updateCirclePosition();
                     }
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
                     return true;
 
                 default:
@@ -121,22 +136,40 @@ public class FloatingWindowService extends Service {
         GradientDrawable circle = new GradientDrawable();
         circle.setShape(GradientDrawable.OVAL);
         circle.setColor(Color.TRANSPARENT);
-        circle.setStroke(5, Color.rgb(0, 190, 255));
+        circle.setStroke(dp(4), Color.rgb(0, 190, 255));
         return circle;
     }
 
-    private void startAsForegroundService() {
-        final String channelId = "floating_overlay_channel";
+    private int dp(float value) {
+        return (int) (value
+                * getResources().getDisplayMetrics().density + 0.5f);
+    }
 
+    private void updateCirclePosition() {
+        if (windowManager == null || floatingCircle == null) {
+            return;
+        }
+
+        try {
+            if (floatingCircle.isAttachedToWindow()) {
+                windowManager.updateViewLayout(floatingCircle, params);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void startAsForegroundService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                    channelId,
+                    CHANNEL_ID,
                     "Floating overlay",
                     NotificationManager.IMPORTANCE_LOW
             );
 
             NotificationManager manager =
-                    (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                    (NotificationManager) getSystemService(
+                            NOTIFICATION_SERVICE
+                    );
 
             if (manager != null) {
                 manager.createNotificationChannel(channel);
@@ -146,18 +179,27 @@ public class FloatingWindowService extends Service {
         Notification.Builder builder;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            builder = new Notification.Builder(this, channelId);
+            builder = new Notification.Builder(this, CHANNEL_ID);
         } else {
             builder = new Notification.Builder(this);
         }
 
         Notification notification = builder
-                .setContentTitle("Floating circle active")
-                .setContentText("The floating circle is running.")
+                .setContentTitle("CrashAI Neo")
+                .setContentText("الدائرة العائمة قيد التشغيل")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setOngoing(true)
                 .build();
 
-        startForeground(1001, notification);
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            );
+        } else {
+            startForeground(NOTIFICATION_ID, notification);
+        }
     }
 
     @Override
@@ -167,14 +209,19 @@ public class FloatingWindowService extends Service {
 
     @Override
     public void onDestroy() {
-        super.onDestroy();
-
         if (floatingCircle != null && windowManager != null) {
             try {
-                windowManager.removeView(floatingCircle);
+                if (floatingCircle.isAttachedToWindow()) {
+                    windowManager.removeView(floatingCircle);
+                }
             } catch (Exception ignored) {
             }
         }
+
+        floatingCircle = null;
+        windowManager = null;
+
+        super.onDestroy();
     }
 
     @Override
