@@ -2,6 +2,7 @@ package sf.grh.crash;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -27,11 +28,18 @@ public class MainActivity extends Activity {
     private static final int BG = Color.rgb(3, 5, 10);
     private static final int BLUE = Color.rgb(30, 145, 255);
     private static final int MUTED = Color.rgb(120, 145, 175);
+
     private static final int OVERLAY_PERMISSION_REQUEST = 701;
 
+    private static final String PREFS_NAME = "crashai_session";
+    private static final String KEY_LOGGED_IN = "logged_in";
+
+    private SharedPreferences preferences;
+
     private int dp(float value) {
-        return (int) (value *
-                getResources().getDisplayMetrics().density + 0.5f);
+        return (int) (
+                value * getResources().getDisplayMetrics().density + 0.5f
+        );
     }
 
     @Override
@@ -41,7 +49,16 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
 
-        showLogin();
+        preferences = getSharedPreferences(
+                PREFS_NAME,
+                MODE_PRIVATE
+        );
+
+        if (preferences.getBoolean(KEY_LOGGED_IN, false)) {
+            showDashboard();
+        } else {
+            showLogin();
+        }
     }
 
     private GradientDrawable makeShape(
@@ -91,16 +108,20 @@ public class MainActivity extends Activity {
 
     private EditText makeInput(String hint) {
         EditText input = new EditText(this);
+
         input.setSingleLine(true);
         input.setTextColor(Color.WHITE);
         input.setHintTextColor(MUTED);
         input.setHint(hint);
         input.setTextSize(15);
         input.setPadding(dp(15), dp(5), dp(15), dp(5));
+
         input.setBackground(makeShape(
                 Color.rgb(14, 19, 30),
-                Color.rgb(35, 85, 140), 1
+                Color.rgb(35, 85, 140),
+                1
         ));
+
         return input;
     }
 
@@ -113,31 +134,38 @@ public class MainActivity extends Activity {
 
     private LinearLayout newPage() {
         LinearLayout layout = new LinearLayout(this);
+
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setGravity(Gravity.CENTER);
         layout.setPadding(dp(28), dp(20), dp(28), dp(20));
         layout.setBackgroundColor(BG);
+
         return layout;
     }
 
     private void showLogin() {
         LinearLayout root = newPage();
 
-        TextView logo = makeLabel("CRASHAI NEO", 30, BLUE, true);
+        TextView logo = makeLabel(
+                "CRASHAI NEO", 30, BLUE, true
+        );
         root.addView(logo, lp(-1, 58));
 
         TextView subtitle = makeLabel(
-                "CRASH INTELLIGENCE", 11, MUTED, false);
+                "CRASH INTELLIGENCE", 11, MUTED, false
+        );
         root.addView(subtitle, lp(-1, 35));
 
         TextView welcome = makeLabel(
-                "تسجيل الدخول", 21, Color.WHITE, true);
+                "تسجيل الدخول", 21, Color.WHITE, true
+        );
 
         LinearLayout.LayoutParams welcomeParams = lp(-1, 55);
         welcomeParams.topMargin = dp(20);
         root.addView(welcome, welcomeParams);
 
         EditText account = makeInput("معرّف حساب 1xBet");
+
         LinearLayout.LayoutParams accountParams = lp(-1, 54);
         accountParams.topMargin = dp(15);
         root.addView(account, accountParams);
@@ -151,14 +179,18 @@ public class MainActivity extends Activity {
 
         TextView note = makeLabel(
                 "رمز التطبيق للتحقق المحلي فقط",
-                12, MUTED, false);
+                12,
+                MUTED,
+                false
+        );
 
         LinearLayout.LayoutParams noteParams = lp(-1, 38);
         noteParams.topMargin = dp(5);
         root.addView(note, noteParams);
 
         TextView login = makeLabel(
-                "دخول", 16, Color.WHITE, true);
+                "دخول", 16, Color.WHITE, true
+        );
         login.setBackground(makeShape(BLUE, BLUE, 1));
 
         LinearLayout.LayoutParams loginParams = lp(-1, 52);
@@ -166,8 +198,11 @@ public class MainActivity extends Activity {
         root.addView(login, loginParams);
 
         login.setOnClickListener(v -> {
-            String accountText = account.getText().toString().trim();
-            String pinText = pin.getText().toString();
+            String accountText =
+                    account.getText().toString().trim();
+
+            String pinText =
+                    pin.getText().toString();
 
             if (accountText.isEmpty() || pinText.isEmpty()) {
                 Toast.makeText(
@@ -175,10 +210,15 @@ public class MainActivity extends Activity {
                         "أدخل المعرّف والرمز للمتابعة",
                         Toast.LENGTH_SHORT
                 ).show();
+
                 return;
             }
 
-            // تحقق محلي بسيط فقط، وليس مصادقة خادم.
+            // حفظ حالة الجلسة فقط، دون حفظ الرمز.
+            preferences.edit()
+                    .putBoolean(KEY_LOGGED_IN, true)
+                    .apply();
+
             showDashboard();
         });
 
@@ -189,57 +229,100 @@ public class MainActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(BG);
 
-        // زر صغير أعلى اليسار لتشغيل الدائرة العائمة.
+        // زر النافذة العائمة أعلى اليسار.
         TextView overlayButton = makeLabel(
-                "◉", 22, BLUE, true);
+                "◉", 22, BLUE, true
+        );
 
         FrameLayout.LayoutParams buttonParams =
                 new FrameLayout.LayoutParams(dp(48), dp(48));
+
         buttonParams.gravity = Gravity.TOP | Gravity.START;
         buttonParams.leftMargin = dp(10);
         buttonParams.topMargin = dp(10);
 
         overlayButton.setBackground(makeCircle(
                 Color.rgb(10, 18, 32),
-                Color.rgb(20, 100, 180), 1
+                Color.rgb(20, 100, 180),
+                1
         ));
 
         root.addView(overlayButton, buttonParams);
-        overlayButton.setOnClickListener(v -> requestOverlayPermission());
+
+        overlayButton.setOnClickListener(
+                v -> requestOverlayPermission()
+        );
+
+        // زر تسجيل الخروج OUT أعلى اليمين.
+        TextView logoutButton = makeLabel(
+                "OUT", 12, BLUE, true
+        );
+
+        FrameLayout.LayoutParams logoutParams =
+                new FrameLayout.LayoutParams(dp(52), dp(36));
+
+        logoutParams.gravity = Gravity.TOP | Gravity.END;
+        logoutParams.rightMargin = dp(12);
+        logoutParams.topMargin = dp(16);
+
+        logoutButton.setBackground(makeShape(
+                Color.rgb(10, 18, 32),
+                Color.rgb(20, 100, 180),
+                1
+        ));
+
+        root.addView(logoutButton, logoutParams);
+
+        logoutButton.setOnClickListener(v -> logout());
 
         // الدائرة الرئيسية.
         FrameLayout center = new FrameLayout(this);
 
         FrameLayout.LayoutParams centerParams =
                 new FrameLayout.LayoutParams(dp(230), dp(230));
+
         centerParams.gravity = Gravity.CENTER;
 
         View outerGlow = new View(this);
+
         outerGlow.setBackground(makeCircle(
                 Color.rgb(7, 20, 38),
-                Color.rgb(15, 90, 170), 2
+                Color.rgb(15, 90, 170),
+                2
         ));
 
         FrameLayout.LayoutParams glowParams =
                 new FrameLayout.LayoutParams(
                         FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT);
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                );
+
         center.addView(outerGlow, glowParams);
 
         View innerCircle = new View(this);
+
         innerCircle.setBackground(makeCircle(
-                Color.rgb(3, 8, 16), BLUE, 3
+                Color.rgb(3, 8, 16),
+                BLUE,
+                3
         ));
 
         FrameLayout.LayoutParams innerParams =
                 new FrameLayout.LayoutParams(dp(175), dp(175));
+
         innerParams.gravity = Gravity.CENTER;
+
         center.addView(innerCircle, innerParams);
 
-        TextView core = makeLabel("AI", 32, BLUE, true);
+        TextView core = makeLabel(
+                "AI", 32, BLUE, true
+        );
+
         FrameLayout.LayoutParams coreParams =
                 new FrameLayout.LayoutParams(dp(100), dp(100));
+
         coreParams.gravity = Gravity.CENTER;
+
         center.addView(core, coreParams);
 
         Animation pulse = new ScaleAnimation(
@@ -248,16 +331,34 @@ public class MainActivity extends Activity {
                 Animation.RELATIVE_TO_SELF, 0.5f,
                 Animation.RELATIVE_TO_SELF, 0.5f
         );
+
         pulse.setDuration(1400);
         pulse.setRepeatMode(Animation.REVERSE);
         pulse.setRepeatCount(Animation.INFINITE);
 
         center.startAnimation(pulse);
+
         root.addView(center, centerParams);
 
         setContentView(root);
 
         checkServerHealth();
+    }
+
+    private void logout() {
+        // حذف حالة الجلسة المحفوظة.
+        preferences.edit()
+                .remove(KEY_LOGGED_IN)
+                .apply();
+
+        // العودة إلى شاشة تسجيل الدخول.
+        showLogin();
+
+        Toast.makeText(
+                this,
+                "تم تسجيل الخروج",
+                Toast.LENGTH_SHORT
+        ).show();
     }
 
     private void requestOverlayPermission() {
@@ -270,7 +371,10 @@ public class MainActivity extends Activity {
             );
 
             startActivityForResult(
-                    intent, OVERLAY_PERMISSION_REQUEST);
+                    intent,
+                    OVERLAY_PERMISSION_REQUEST
+            );
+
         } else {
             startFloatingService();
         }
@@ -279,12 +383,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(
             int requestCode, int resultCode, Intent data) {
+
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == OVERLAY_PERMISSION_REQUEST) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                     || Settings.canDrawOverlays(this)) {
+
                 startFloatingService();
+
             } else {
                 Toast.makeText(
                         this,
@@ -329,8 +436,12 @@ public class MainActivity extends Activity {
 
             try {
                 URL url = new URL(
-                        "https://crashai-neo-api.onrender.com/health");
-                connection = (HttpURLConnection) url.openConnection();
+                        "https://crashai-neo-api.onrender.com/health"
+                );
+
+                connection = (HttpURLConnection)
+                        url.openConnection();
+
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(8000);
                 connection.setReadTimeout(8000);
