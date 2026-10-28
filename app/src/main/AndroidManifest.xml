@@ -23,7 +23,7 @@
         </activity>
 
         <service
-            android:name=".BubbleService"
+            android:name=".FloatingWindowService"
             android:exported="false" />
 
     </application>
