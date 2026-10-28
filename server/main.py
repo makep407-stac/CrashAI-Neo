@@ -1,12 +1,32 @@
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from math import isfinite
+from statistics import median, pstdev
 from typing import List
 
-app = FastAPI(title="CrashAI Neo API", version="0.1.0")
+from fastapi import FastAPI
+from pydantic import BaseModel, Field, field_validator
+
+
+app = FastAPI(
+    title="CrashAI Neo API",
+    version="0.2.0"
+)
 
 
 class RoundsRequest(BaseModel):
-    rounds: List[float] = Field(default_factory=list, max_length=500)
+    rounds: List[float] = Field(
+        min_length=1,
+        max_length=500
+    )
+
+    @field_validator("rounds")
+    @classmethod
+    def validate_rounds(cls, values):
+        for value in values:
+            if not isfinite(value) or value <= 0:
+                raise ValueError(
+                    "All round multipliers must be finite and positive."
+                )
+        return values
 
 
 @app.get("/")
@@ -15,39 +35,52 @@ def root():
         "app": "CrashAI Neo API",
         "status": "ok",
         "prediction_available": False,
-        "message": "Server is running. Historical data is not configured yet."
+        "message": "Statistical analysis API is running."
     }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "version": "0.2.0"
+    }
 
 
 @app.post("/analyze")
 def analyze(payload: RoundsRequest):
-    if not payload.rounds:
-        return {
-            "status": "no_data",
-            "message": "Submit historical round multipliers first.",
-            "count": 0
-        }
+    rounds = payload.rounds
+    count = len(rounds)
 
-    clean = [x for x in payload.rounds if x > 0]
+    ordered = sorted(rounds)
 
-    if not clean:
-        return {
-            "status": "invalid_data",
-            "message": "Values must be positive.",
-            "count": 0
-        }
+    def percentage(condition):
+        matches = sum(1 for value in rounds if condition(value))
+        return round(matches / count * 100, 2)
 
-    return {
+    result = {
         "status": "analysis_only",
-        "count": len(clean),
-        "mean": round(sum(clean) / len(clean), 3),
-        "min": min(clean),
-        "max": max(clean),
+        "count": count,
+        "mean": round(sum(rounds) / count, 3),
+        "median": round(median(rounds), 3),
+        "min": round(min(rounds), 3),
+        "max": round(max(rounds), 3),
+        "standard_deviation": round(pstdev(rounds), 3),
+        "percent_at_least_2x": percentage(
+            lambda x: x >= 2
+        ),
+        "percent_at_least_5x": percentage(
+            lambda x: x >= 5
+        ),
+        "percent_at_least_10x": percentage(
+            lambda x: x >= 10
+        ),
         "prediction_available": False,
-        "message": "Statistical analysis only; no reliable next-round prediction is available."
+        "message": (
+            "Historical descriptive statistics only. "
+            "These results do not establish a reliable "
+            "prediction of the next round."
+        )
     }
+
+    return result
