@@ -11,7 +11,6 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
-import android.view.WindowManager;
 import android.view.animation.Animation;
 import android.view.animation.ScaleAnimation;
 import android.widget.EditText;
@@ -20,11 +19,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -33,13 +27,7 @@ public class MainActivity extends Activity {
     private static final int BG = Color.rgb(3, 5, 10);
     private static final int BLUE = Color.rgb(30, 145, 255);
     private static final int MUTED = Color.rgb(120, 145, 175);
-
     private static final int OVERLAY_PERMISSION_REQUEST = 701;
-
-    private static final String API_URL =
-            "https://crashai-neo-api.onrender.com/health";
-
-    private TextView statusView;
 
     private int dp(float value) {
         return (int) (value *
@@ -52,12 +40,6 @@ public class MainActivity extends Activity {
 
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
-
-        if (Build.VERSION.SDK_INT >= 21) {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            );
-        }
 
         showLogin();
     }
@@ -109,7 +91,6 @@ public class MainActivity extends Activity {
 
     private EditText makeInput(String hint) {
         EditText input = new EditText(this);
-
         input.setSingleLine(true);
         input.setTextColor(Color.WHITE);
         input.setHintTextColor(MUTED);
@@ -120,7 +101,6 @@ public class MainActivity extends Activity {
                 Color.rgb(14, 19, 30),
                 Color.rgb(35, 85, 140), 1
         ));
-
         return input;
     }
 
@@ -143,8 +123,7 @@ public class MainActivity extends Activity {
     private void showLogin() {
         LinearLayout root = newPage();
 
-        TextView logo = makeLabel(
-                "CRASHAI NEO", 30, BLUE, true);
+        TextView logo = makeLabel("CRASHAI NEO", 30, BLUE, true);
         root.addView(logo, lp(-1, 58));
 
         TextView subtitle = makeLabel(
@@ -179,4 +158,213 @@ public class MainActivity extends Activity {
         root.addView(note, noteParams);
 
         TextView login = makeLabel(
-                "د
+                "دخول", 16, Color.WHITE, true);
+        login.setBackground(makeShape(BLUE, BLUE, 1));
+
+        LinearLayout.LayoutParams loginParams = lp(-1, 52);
+        loginParams.topMargin = dp(18);
+        root.addView(login, loginParams);
+
+        login.setOnClickListener(v -> {
+            String accountText = account.getText().toString().trim();
+            String pinText = pin.getText().toString();
+
+            if (accountText.isEmpty() || pinText.isEmpty()) {
+                Toast.makeText(
+                        this,
+                        "أدخل المعرّف والرمز للمتابعة",
+                        Toast.LENGTH_SHORT
+                ).show();
+                return;
+            }
+
+            // تحقق محلي بسيط فقط، وليس مصادقة خادم.
+            showDashboard();
+        });
+
+        setContentView(root);
+    }
+
+    private void showDashboard() {
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(BG);
+
+        // زر صغير أعلى اليسار لتشغيل الدائرة العائمة.
+        TextView overlayButton = makeLabel(
+                "◉", 22, BLUE, true);
+
+        FrameLayout.LayoutParams buttonParams =
+                new FrameLayout.LayoutParams(dp(48), dp(48));
+        buttonParams.gravity = Gravity.TOP | Gravity.START;
+        buttonParams.leftMargin = dp(10);
+        buttonParams.topMargin = dp(10);
+
+        overlayButton.setBackground(makeCircle(
+                Color.rgb(10, 18, 32),
+                Color.rgb(20, 100, 180), 1
+        ));
+
+        root.addView(overlayButton, buttonParams);
+        overlayButton.setOnClickListener(v -> requestOverlayPermission());
+
+        // الدائرة الرئيسية.
+        FrameLayout center = new FrameLayout(this);
+
+        FrameLayout.LayoutParams centerParams =
+                new FrameLayout.LayoutParams(dp(230), dp(230));
+        centerParams.gravity = Gravity.CENTER;
+
+        View outerGlow = new View(this);
+        outerGlow.setBackground(makeCircle(
+                Color.rgb(7, 20, 38),
+                Color.rgb(15, 90, 170), 2
+        ));
+
+        FrameLayout.LayoutParams glowParams =
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT);
+        center.addView(outerGlow, glowParams);
+
+        View innerCircle = new View(this);
+        innerCircle.setBackground(makeCircle(
+                Color.rgb(3, 8, 16), BLUE, 3
+        ));
+
+        FrameLayout.LayoutParams innerParams =
+                new FrameLayout.LayoutParams(dp(175), dp(175));
+        innerParams.gravity = Gravity.CENTER;
+        center.addView(innerCircle, innerParams);
+
+        TextView core = makeLabel("AI", 32, BLUE, true);
+        FrameLayout.LayoutParams coreParams =
+                new FrameLayout.LayoutParams(dp(100), dp(100));
+        coreParams.gravity = Gravity.CENTER;
+        center.addView(core, coreParams);
+
+        Animation pulse = new ScaleAnimation(
+                0.96f, 1.04f,
+                0.96f, 1.04f,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f
+        );
+        pulse.setDuration(1400);
+        pulse.setRepeatMode(Animation.REVERSE);
+        pulse.setRepeatCount(Animation.INFINITE);
+
+        center.startAnimation(pulse);
+        root.addView(center, centerParams);
+
+        setContentView(root);
+
+        checkServerHealth();
+    }
+
+    private void requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && !Settings.canDrawOverlays(this)) {
+
+            Intent intent = new Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName())
+            );
+
+            startActivityForResult(
+                    intent, OVERLAY_PERMISSION_REQUEST);
+        } else {
+            startFloatingService();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(
+            int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == OVERLAY_PERMISSION_REQUEST) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+                    || Settings.canDrawOverlays(this)) {
+                startFloatingService();
+            } else {
+                Toast.makeText(
+                        this,
+                        "يجب السماح بالظهور فوق التطبيقات",
+                        Toast.LENGTH_LONG
+                ).show();
+            }
+        }
+    }
+
+    private void startFloatingService() {
+        Intent intent = new Intent(
+                MainActivity.this,
+                FloatingWindowService.class
+        );
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+
+            Toast.makeText(
+                    this,
+                    "تم طلب تشغيل الدائرة العائمة",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+        } catch (Exception e) {
+            Toast.makeText(
+                    this,
+                    "تعذر تشغيل الدائرة: " + e.getMessage(),
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    private void checkServerHealth() {
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+
+            try {
+                URL url = new URL(
+                        "https://crashai-neo-api.onrender.com/health");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(8000);
+                connection.setReadTimeout(8000);
+
+                int code = connection.getResponseCode();
+
+                runOnUiThread(() -> {
+                    if (code == 200) {
+                        Toast.makeText(
+                                MainActivity.this,
+                                "اتصال الخادم ناجح",
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    } else {
+                        Toast.makeText(
+                                MainActivity.this,
+                                "الخادم أعاد الرمز: " + code,
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    }
+                });
+
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(
+                        MainActivity.this,
+                        "تعذر الاتصال بالخادم",
+                        Toast.LENGTH_SHORT
+                ).show());
+
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        }).start();
+    }
+}
