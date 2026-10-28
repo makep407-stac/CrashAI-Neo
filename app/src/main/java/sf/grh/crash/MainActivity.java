@@ -214,7 +214,8 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            // حفظ حالة الجلسة فقط، دون حفظ الرمز.
+            // حفظ حالة الجلسة محليًا فقط.
+            // لا نحفظ الرمز ولا نتحقق من حساب 1xBet.
             preferences.edit()
                     .putBoolean(KEY_LOGGED_IN, true)
                     .apply();
@@ -229,7 +230,7 @@ public class MainActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(BG);
 
-        // زر النافذة العائمة أعلى اليسار.
+        // زر تشغيل النافذة العائمة أعلى اليسار.
         TextView overlayButton = makeLabel(
                 "◉", 22, BLUE, true
         );
@@ -253,7 +254,7 @@ public class MainActivity extends Activity {
                 v -> requestOverlayPermission()
         );
 
-        // زر تسجيل الخروج OUT أعلى اليمين.
+        // زر OUT الصغير أعلى اليمين.
         TextView logoutButton = makeLabel(
                 "OUT", 12, BLUE, true
         );
@@ -275,7 +276,7 @@ public class MainActivity extends Activity {
 
         logoutButton.setOnClickListener(v -> logout());
 
-        // الدائرة الرئيسية.
+        // الدائرة الرئيسية المتوهجة.
         FrameLayout center = new FrameLayout(this);
 
         FrameLayout.LayoutParams centerParams =
@@ -346,7 +347,15 @@ public class MainActivity extends Activity {
     }
 
     private void logout() {
-        // حذف حالة الجلسة المحفوظة.
+        // إيقاف خدمة الدائرة العائمة.
+        Intent serviceIntent = new Intent(
+                MainActivity.this,
+                FloatingWindowService.class
+        );
+
+        stopService(serviceIntent);
+
+        // مسح حالة الجلسة المحفوظة.
         preferences.edit()
                 .remove(KEY_LOGGED_IN)
                 .apply();
@@ -356,7 +365,7 @@ public class MainActivity extends Activity {
 
         Toast.makeText(
                 this,
-                "تم تسجيل الخروج",
+                "تم تسجيل الخروج وإيقاف الدائرة العائمة",
                 Toast.LENGTH_SHORT
         ).show();
     }
