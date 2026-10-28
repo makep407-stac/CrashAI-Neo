@@ -1,7 +1,7 @@
+
 package sf.grh.crash;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -11,9 +11,9 @@ import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.ScaleAnimation;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import org.json.JSONObject;
 
@@ -33,12 +33,10 @@ public class MainActivity extends Activity {
             "https://crashai-neo-api.onrender.com/health";
 
     private TextView statusView;
-    private TextView orbText;
 
     private int dp(float value) {
-        return (int) (
-            value * getResources().getDisplayMetrics().density + 0.5f
-        );
+        return (int) (value *
+                getResources().getDisplayMetrics().density + 0.5f);
     }
 
     @Override
@@ -50,7 +48,7 @@ public class MainActivity extends Activity {
 
         if (android.os.Build.VERSION.SDK_INT >= 21) {
             getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
             );
         }
 
@@ -58,9 +56,7 @@ public class MainActivity extends Activity {
     }
 
     private GradientDrawable makeShape(
-            int fill,
-            int stroke,
-            int strokeWidth) {
+            int fill, int stroke, int strokeWidth) {
 
         GradientDrawable drawable = new GradientDrawable();
         drawable.setShape(GradientDrawable.RECTANGLE);
@@ -74,11 +70,23 @@ public class MainActivity extends Activity {
         return drawable;
     }
 
+    // دائرة فعلية وليست مربعاً مستدير الحواف
+    private GradientDrawable makeCircle(
+            int fill, int stroke, int strokeWidth) {
+
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setShape(GradientDrawable.OVAL);
+        drawable.setColor(fill);
+
+        if (strokeWidth > 0) {
+            drawable.setStroke(dp(strokeWidth), stroke);
+        }
+
+        return drawable;
+    }
+
     private TextView makeLabel(
-            String text,
-            int size,
-            int color,
-            boolean bold) {
+            String text, int size, int color, boolean bold) {
 
         TextView view = new TextView(this);
         view.setText(text);
@@ -102,21 +110,18 @@ public class MainActivity extends Activity {
         input.setHint(hint);
         input.setTextSize(15);
         input.setPadding(dp(15), dp(5), dp(15), dp(5));
-        input.setBackground(
-            makeShape(Color.rgb(14, 19, 30),
-                      Color.rgb(35, 85, 140), 1)
-        );
+        input.setBackground(makeShape(
+                Color.rgb(14, 19, 30),
+                Color.rgb(35, 85, 140), 1
+        ));
 
         return input;
     }
 
-    private android.widget.LinearLayout.LayoutParams lp(
-            int width,
-            int height) {
-
+    private LinearLayout.LayoutParams lp(int width, int height) {
         return new LinearLayout.LayoutParams(
-            width < 0 ? width : dp(width),
-            height < 0 ? height : dp(height)
+                width < 0 ? width : dp(width),
+                height < 0 ? height : dp(height)
         );
     }
 
@@ -133,27 +138,15 @@ public class MainActivity extends Activity {
         LinearLayout root = newPage();
 
         TextView logo = makeLabel(
-            "CRASHAI NEO",
-            30,
-            BLUE,
-            true
-        );
+                "CRASHAI NEO", 30, BLUE, true);
         root.addView(logo, lp(-1, 58));
 
         TextView subtitle = makeLabel(
-            "CRASH INTELLIGENCE",
-            11,
-            MUTED,
-            false
-        );
+                "CRASH INTELLIGENCE", 11, MUTED, false);
         root.addView(subtitle, lp(-1, 35));
 
         TextView welcome = makeLabel(
-            "تسجيل الدخول",
-            21,
-            Color.WHITE,
-            true
-        );
+                "تسجيل الدخول", 21, Color.WHITE, true);
 
         LinearLayout.LayoutParams welcomeParams = lp(-1, 55);
         welcomeParams.topMargin = dp(20);
@@ -172,26 +165,18 @@ public class MainActivity extends Activity {
         root.addView(pin, pinParams);
 
         TextView note = makeLabel(
-            "رمز التطبيق للتحقق المحلي فقط",
-            12,
-            MUTED,
-            false
-        );
+                "رمز التطبيق للتحقق المحلي فقط",
+                12, MUTED, false);
 
         LinearLayout.LayoutParams noteParams = lp(-1, 38);
         noteParams.topMargin = dp(5);
         root.addView(note, noteParams);
 
         TextView login = makeLabel(
-            "دخول",
-            16,
-            Color.WHITE,
-            true
-        );
+                "دخول", 16, Color.WHITE, true);
 
-        login.setBackground(
-            makeShape(Color.rgb(13, 105, 200), BLUE, 1)
-        );
+        login.setBackground(makeShape(
+                Color.rgb(13, 105, 200), BLUE, 1));
 
         LinearLayout.LayoutParams loginParams = lp(-1, 52);
         loginParams.topMargin = dp(15);
@@ -217,52 +202,76 @@ public class MainActivity extends Activity {
     private void showDashboard() {
         LinearLayout root = newPage();
 
-        // شعار بسيط أعلى الشاشة
         TextView logo = makeLabel(
-            "CRASHAI NEO",
-            17,
-            Color.rgb(95, 145, 200),
-            true
+                "CRASHAI NEO",
+                17,
+                Color.rgb(95, 145, 200),
+                true
         );
 
-        LinearLayout.LayoutParams logoParams = lp(-1, 45);
-        logoParams.gravity = Gravity.CENTER;
-        root.addView(logo, logoParams);
+        root.addView(logo, lp(-1, 45));
 
-        // مساحة سوداء فوق الدائرة
         View topSpace = new View(this);
         root.addView(topSpace, lp(1, 30));
 
-        // دائرة النيون
-        TextView orb = makeLabel(
-            "●",
-            30,
-            Color.WHITE,
-            true
-        );
+        // إطار واحد يحتوي الدائرة والنص؛ لا نضيف الدائرة إلى root
+        FrameLayout frame = new FrameLayout(this);
+        frame.setBackgroundColor(BG);
 
-        orb.setBackground(
-            makeShape(
+        LinearLayout.LayoutParams frameParams = lp(-1, 220);
+        frameParams.gravity = Gravity.CENTER;
+        root.addView(frame, frameParams);
+
+        TextView orb = makeLabel("", 22, Color.WHITE, true);
+
+        orb.setBackground(makeCircle(
                 Color.rgb(4, 15, 32),
                 BLUE,
                 3
-            )
+        ));
+
+        if (android.os.Build.VERSION.SDK_INT >= 21) {
+            orb.setElevation(dp(12));
+        }
+
+        FrameLayout.LayoutParams circleParams =
+                new FrameLayout.LayoutParams(
+                        dp(185), dp(185), Gravity.CENTER);
+
+        frame.addView(orb, circleParams);
+
+        // هالة نيون خارجية خفيفة
+        View halo = new View(this);
+        GradientDrawable haloDrawable = makeCircle(
+                Color.TRANSPARENT,
+                Color.rgb(15, 85, 190),
+                2
         );
+        halo.setBackground(haloDrawable);
 
-        orb.setElevation(dp(12));
+        FrameLayout.LayoutParams haloParams =
+                new FrameLayout.LayoutParams(
+                        dp(201), dp(201), Gravity.CENTER);
 
-        LinearLayout.LayoutParams orbParams = lp(185, 185);
-        orbParams.gravity = Gravity.CENTER;
-        orbParams.topMargin = dp(15);
-        orbParams.bottomMargin = dp(20);
-        root.addView(orb, orbParams);
+        frame.addView(halo, haloParams);
+        halo.bringToFront();
 
-        // تأثير نبض متكرر
+        TextView orbText = makeLabel(
+                "CRASH", 22, Color.WHITE, true);
+
+        FrameLayout.LayoutParams textParams =
+                new FrameLayout.LayoutParams(
+                        dp(150), dp(70), Gravity.CENTER);
+
+        frame.addView(orbText, textParams);
+        orbText.bringToFront();
+
+        // نبض متكرر للدائرة
         ScaleAnimation pulse = new ScaleAnimation(
-            0.96f, 1.04f,
-            0.96f, 1.04f,
-            Animation.RELATIVE_TO_SELF, 0.5f,
-            Animation.RELATIVE_TO_SELF, 0.5f
+                0.96f, 1.04f,
+                0.96f, 1.04f,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f
         );
 
         pulse.setDuration(1400);
@@ -271,56 +280,24 @@ public class MainActivity extends Activity {
 
         orb.startAnimation(pulse);
 
-        orbText = makeLabel(
-            "CRASH",
-            22,
-            Color.WHITE,
-            true
+        ScaleAnimation haloPulse = new ScaleAnimation(
+                0.94f, 1.07f,
+                0.94f, 1.07f,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f
         );
 
-        orbText.setGravity(Gravity.CENTER);
-        orbText.setElevation(dp(15));
+        haloPulse.setDuration(1800);
+        haloPulse.setRepeatMode(Animation.REVERSE);
+        haloPulse.setRepeatCount(Animation.INFINITE);
 
-        // نضع النص فوق الدائرة باستخدام FrameLayout
-        android.widget.FrameLayout frame =
-            new android.widget.FrameLayout(this);
-
-        frame.setBackgroundColor(BG);
-
-        android.widget.FrameLayout.LayoutParams circleFrameParams =
-            new android.widget.FrameLayout.LayoutParams(
-                dp(185),
-                dp(185),
-                Gravity.CENTER
-            );
-
-        frame.addView(orb, circleFrameParams);
-
-        android.widget.FrameLayout.LayoutParams textParams =
-            new android.widget.FrameLayout.LayoutParams(
-                dp(150),
-                dp(70),
-                Gravity.CENTER
-            );
-
-        frame.addView(orbText, textParams);
-
-        // استبدال موضع الدائرة بإطار يحتوي الدائرة والنص
-        root.removeView(orb);
-
-        LinearLayout.LayoutParams frameParams = lp(-1, 220);
-        frameParams.gravity = Gravity.CENTER;
-        root.addView(frame, frameParams);
+        halo.startAnimation(haloPulse);
 
         View bottomSpace = new View(this);
         root.addView(bottomSpace, lp(1, 40));
 
         statusView = makeLabel(
-            "جارٍ الاتصال",
-            11,
-            MUTED,
-            false
-        );
+                "جارٍ الاتصال", 11, MUTED, false);
 
         root.addView(statusView, lp(-1, 28));
 
@@ -335,7 +312,8 @@ public class MainActivity extends Activity {
 
             try {
                 URL url = new URL(API_URL);
-                connection = (HttpURLConnection) url.openConnection();
+                connection =
+                        (HttpURLConnection) url.openConnection();
 
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(15000);
@@ -344,16 +322,15 @@ public class MainActivity extends Activity {
                 int code = connection.getResponseCode();
 
                 InputStream stream =
-                    code >= 200 && code < 400
-                    ? connection.getInputStream()
-                    : connection.getErrorStream();
+                        code >= 200 && code < 400
+                                ? connection.getInputStream()
+                                : connection.getErrorStream();
 
                 StringBuilder body = new StringBuilder();
 
                 if (stream != null) {
                     BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(stream, "UTF-8")
-                    );
+                            new InputStreamReader(stream, "UTF-8"));
 
                     String line;
 
@@ -362,26 +339,27 @@ public class MainActivity extends Activity {
                     }
 
                     reader.close();
+                    stream.close();
                 }
 
                 JSONObject response =
-                    new JSONObject(body.toString());
+                        new JSONObject(body.toString());
 
                 boolean healthy = code == 200
-                    && "ok".equals(response.optString("status"));
+                        && "ok".equals(
+                                response.optString("status"));
 
                 runOnUiThread(() -> {
                     if (statusView != null) {
                         if (healthy) {
                             statusView.setText("● متصل");
                             statusView.setTextColor(
-                                Color.rgb(80, 220, 150)
-                            );
+                                    Color.rgb(80, 220, 150));
                         } else {
-                            statusView.setText("● الخادم غير متاح");
+                            statusView.setText(
+                                    "● الخادم غير متاح");
                             statusView.setTextColor(
-                                Color.rgb(255, 100, 100)
-                            );
+                                    Color.rgb(255, 100, 100));
                         }
                     }
                 });
@@ -389,7 +367,8 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     if (statusView != null) {
-                        statusView.setText("● انتظار الاتصال");
+                        statusView.setText(
+                                "● انتظار الاتصال");
                         statusView.setTextColor(MUTED);
                     }
                 });
