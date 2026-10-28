@@ -15,8 +15,21 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
@@ -25,7 +38,15 @@ public class MainActivity extends Activity {
     private static final int BLUE = Color.rgb(45, 158, 255);
     private static final int MUTED = Color.rgb(157, 180, 208);
 
+    private static final String API_URL =
+            "https://crashai-neo-api.onrender.com/analyze";
+
     private boolean waitingForOverlayPermission;
+
+    private TextView connectionStatus;
+    private TextView resultText;
+    private EditText roundsInput;
+    private Button analyzeButton;
 
     @Override
     public void onCreate(Bundle state) {
@@ -260,8 +281,8 @@ public class MainActivity extends Activity {
                 .setTitle("تنبيه")
                 .setMessage(
                     "تم قبول الرمز محلياً فقط. التطبيق لا يتحقق "
-                    + "من حساب 1xBet ولا يعرض تنبؤات حقيقية "
-                    + "حتى ربط محرك بيانات."
+                    + "من حساب 1xBet ولا يضمن نتائج اللعبة. "
+                    + "يمكنك استخدام التحليل الإحصائي للنتائج السابقة."
                 )
                 .setPositiveButton(
                     "متابعة",
@@ -293,18 +314,18 @@ public class MainActivity extends Activity {
             params(-1, 48)
         );
 
-        TextView status = label(
-            "● غير متصل بمصدر بيانات",
+        connectionStatus = label(
+            "● جارٍ الاتصال بخادم التحليل...",
             12,
             Color.rgb(255, 194, 89),
             false
         );
 
-        root.addView(status, params(-1, 32));
+        root.addView(connectionStatus, params(-1, 32));
 
         TextView orb = label(
-            "—",
-            42,
+            "CRASH",
+            30,
             Color.WHITE,
             true
         );
@@ -316,36 +337,77 @@ public class MainActivity extends Activity {
         orb.setElevation(dp(8));
 
         LinearLayout.LayoutParams orbParams =
-                params(220, 220);
+                params(190, 190);
 
         orbParams.gravity = Gravity.CENTER_HORIZONTAL;
-        orbParams.topMargin = dp(32);
-        orbParams.bottomMargin = dp(18);
+        orbParams.topMargin = dp(12);
+        orbParams.bottomMargin = dp(14);
 
         root.addView(orb, orbParams);
 
         root.addView(
-            label("التنبؤ القادم",
+            label("التحليل الإحصائي للجولات",
                 18, Color.WHITE, true),
-            params(-1, 36)
+            params(-1, 40)
         );
 
-        root.addView(
-            label("لا توجد نتيجة حقيقية حالياً",
-                13, MUTED, false),
-            params(-1, 34)
+        TextView instructions = label(
+            "أدخل نتائج الجولات السابقة مفصولة بفواصل. "
+            + "استخدم النقطة للأعداد العشرية.",
+            13,
+            MUTED,
+            false
         );
 
-        root.addView(
-            label(
-                "ستظهر النتائج هنا بعد ربط محرك التنبؤ "
-                + "الأصلي ومصدر بيانات موثوق.",
-                12,
-                MUTED,
-                false
-            ),
-            params(-1, 58)
+        instructions.setGravity(Gravity.CENTER);
+        root.addView(instructions, params(-1, 58));
+
+        roundsInput = new EditText(this);
+        roundsInput.setTextColor(Color.WHITE);
+        roundsInput.setHintTextColor(Color.rgb(125, 145, 171));
+        roundsInput.setHint("مثال: 1.25, 2.40, 1.08, 3.15");
+        roundsInput.setTextSize(15);
+        roundsInput.setGravity(Gravity.TOP | Gravity.START);
+        roundsInput.setMinLines(3);
+        roundsInput.setMaxLines(5);
+        roundsInput.setPadding(
+            dp(14), dp(12), dp(14), dp(12)
         );
+        roundsInput.setBackground(
+            shape(PANEL, 16, Color.rgb(52, 77, 110), 1)
+        );
+
+        root.addView(roundsInput, params(-1, 110));
+
+        analyzeButton = button("تحليل النتائج  ←");
+
+        LinearLayout.LayoutParams analyzeParams =
+                params(-1, 54);
+
+        analyzeParams.topMargin = dp(12);
+        root.addView(analyzeButton, analyzeParams);
+
+        resultText = label(
+            "ستظهر إحصائيات النتائج هنا.",
+            14,
+            MUTED,
+            false
+        );
+
+        resultText.setBackground(
+            shape(PANEL, 18, Color.rgb(52, 77, 110), 1)
+        );
+        resultText.setPadding(
+            dp(12), dp(12), dp(12), dp(12)
+        );
+
+        LinearLayout.LayoutParams resultParams =
+                params(-1, -2);
+
+        resultParams.topMargin = dp(14);
+        root.addView(resultText, resultParams);
+
+        analyzeButton.setOnClickListener(v -> analyzeRounds());
 
         Button bubble = button("إعداد الفقاعة العائمة");
 
@@ -376,18 +438,276 @@ public class MainActivity extends Activity {
             new AlertDialog.Builder(this)
                 .setTitle("حول CrashAI Neo")
                 .setMessage(
-                    "واجهة تجريبية. لا تتصل هذه النسخة "
-                    + "بخوادم 1xBet ولا تتنبأ بنتائج اللعبة."
+                    "يتصل التطبيق بخادم لتحليل إحصائيات "
+                    + "النتائج التي تدخلها. هذا التحليل لا "
+                    + "يتنبأ بنتيجة الجولة القادمة ولا يضمن الربح."
                 )
                 .setPositiveButton("حسناً", null)
                 .show()
         );
 
-        setContentView(root);
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+        scrollView.setBackgroundColor(BG);
+        scrollView.addView(root);
+        setContentView(scrollView);
+
+        checkServer();
+    }
+
+    private void checkServer() {
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+
+            try {
+                URL url = new URL(
+                    "https://crashai-neo-api.onrender.com/health"
+                );
+
+                connection =
+                    (HttpURLConnection) url.openConnection();
+
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(15000);
+
+                int code = connection.getResponseCode();
+
+                runOnUiThread(() -> {
+                    if (connectionStatus == null) return;
+
+                    if (code == 200) {
+                        connectionStatus.setText(
+                            "● متصل بخادم التحليل"
+                        );
+                        connectionStatus.setTextColor(
+                            Color.rgb(80, 220, 140)
+                        );
+                    } else {
+                        connectionStatus.setText(
+                            "● الخادم لا يستجيب حالياً"
+                        );
+                    }
+                });
+
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (connectionStatus != null) {
+                        connectionStatus.setText(
+                            "● تعذّر الاتصال بالخادم"
+                        );
+                        connectionStatus.setTextColor(
+                            Color.rgb(255, 120, 100)
+                        );
+                    }
+                });
+
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        }).start();
+    }
+
+    private void analyzeRounds() {
+        String raw = roundsInput.getText().toString().trim();
+
+        if (raw.isEmpty()) {
+            roundsInput.setError("أدخل نتائج الجولات أولاً");
+            return;
+        }
+
+        String[] parts = raw.split("[,،;؛\\s]+");
+
+        if (parts.length > 500) {
+            roundsInput.setError(
+                "أدخل 500 نتيجة أو أقل في كل مرة"
+            );
+            return;
+        }
+
+        ArrayList<Double> values = new ArrayList<>();
+
+        try {
+            for (String part : parts) {
+                if (part.trim().isEmpty()) continue;
+
+                double value = Double.parseDouble(part.trim());
+
+                if (Double.isNaN(value)
+                        || Double.isInfinite(value)
+                        || value <= 0) {
+                    throw new NumberFormatException();
+                }
+
+                values.add(value);
+            }
+        } catch (NumberFormatException e) {
+            roundsInput.setError(
+                "تحقق من الأرقام. مثال: 1.25, 2.40, 3.10"
+            );
+            return;
+        }
+
+        if (values.isEmpty()) {
+            roundsInput.setError("لم يتم العثور على أرقام صحيحة");
+            return;
+        }
+
+        JSONArray rounds = new JSONArray();
+
+        for (Double value : values) {
+            rounds.put(value);
+        }
+
+        JSONObject requestBody = new JSONObject();
+
+        try {
+            requestBody.put("rounds", rounds);
+        } catch (Exception e) {
+            showError("تعذّر تجهيز البيانات");
+            return;
+        }
+
+        analyzeButton.setEnabled(false);
+        analyzeButton.setText("جارٍ التحليل...");
+        resultText.setText("يتم إرسال النتائج إلى خادم التحليل...");
+        connectionStatus.setText("● جارٍ تحليل البيانات");
+
+        final String jsonBody = requestBody.toString();
+
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+
+            try {
+                URL url = new URL(API_URL);
+
+                connection =
+                    (HttpURLConnection) url.openConnection();
+
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(20000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty(
+                    "Content-Type",
+                    "application/json; charset=UTF-8"
+                );
+                connection.setRequestProperty(
+                    "Accept",
+                    "application/json"
+                );
+
+                byte[] data = jsonBody.getBytes("UTF-8");
+
+                try (OutputStream output =
+                        connection.getOutputStream()) {
+                    output.write(data);
+                    output.flush();
+                }
+
+                int code = connection.getResponseCode();
+
+                InputStream stream =
+                    (code >= 200 && code < 400)
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+
+                StringBuilder response = new StringBuilder();
+
+                if (stream != null) {
+                    try (BufferedReader reader =
+                            new BufferedReader(
+                                new InputStreamReader(
+                                    stream, "UTF-8"
+                                ))) {
+
+                        String line;
+
+                        while ((line = reader.readLine()) != null) {
+                            response.append(line);
+                        }
+                    }
+                }
+
+                if (code < 200 || code >= 300) {
+                    throw new Exception(
+                        "استجاب الخادم برمز: " + code
+                    );
+                }
+
+                JSONObject result =
+                    new JSONObject(response.toString());
+
+                int count = result.optInt("count", values.size());
+                double mean = result.optDouble("mean", 0);
+                double min = result.optDouble("min", 0);
+                double max = result.optDouble("max", 0);
+
+                String message =
+                    "تم تحليل النتائج بنجاح\n\n"
+                    + "عدد الجولات: " + count + "\n"
+                    + "المتوسط: "
+                    + String.format(Locale.US, "%.2f", mean) + "x\n"
+                    + "أدنى نتيجة: "
+                    + String.format(Locale.US, "%.2f", min) + "x\n"
+                    + "أعلى نتيجة: "
+                    + String.format(Locale.US, "%.2f", max) + "x\n\n"
+                    + "تنبيه: هذه إحصائيات للنتائج السابقة فقط، "
+                    + "وليست تنبؤاً بالجولة القادمة.";
+
+                runOnUiThread(() -> {
+                    resultText.setText(message);
+
+                    connectionStatus.setText(
+                        "● متصل بخادم التحليل"
+                    );
+                    connectionStatus.setTextColor(
+                        Color.rgb(80, 220, 140)
+                    );
+
+                    analyzeButton.setEnabled(true);
+                    analyzeButton.setText("تحليل النتائج  ←");
+                });
+
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    resultText.setText(
+                        "تعذّر تحليل النتائج.\n"
+                        + "تحقق من اتصال الإنترنت وحاول مجدداً.\n\n"
+                        + "قد يحتاج الخادم المجاني إلى بعض الوقت "
+                        + "ليبدأ العمل إذا كان متوقفاً مؤقتاً."
+                    );
+
+                    connectionStatus.setText(
+                        "● فشل الاتصال أو التحليل"
+                    );
+                    connectionStatus.setTextColor(
+                        Color.rgb(255, 120, 100)
+                    );
+
+                    analyzeButton.setEnabled(true);
+                    analyzeButton.setText("إعادة المحاولة");
+                });
+
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        }).start();
+    }
+
+    private void showError(String message) {
+        Toast.makeText(
+            this,
+            message,
+            Toast.LENGTH_LONG
+        ).show();
     }
 
     private void requestBubblePermission() {
-
         if (Build.VERSION.SDK_INT >= 23
                 && !Settings.canDrawOverlays(this)) {
 
@@ -402,7 +722,6 @@ public class MainActivity extends Activity {
                 startActivity(intent);
 
             } catch (Exception exception) {
-
                 waitingForOverlayPermission = false;
 
                 Toast.makeText(
@@ -431,7 +750,6 @@ public class MainActivity extends Activity {
             ).show();
 
         } catch (Exception exception) {
-
             Toast.makeText(
                 this,
                 "تعذر تشغيل الفقاعة",
