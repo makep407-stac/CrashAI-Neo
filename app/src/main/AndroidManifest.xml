@@ -10,6 +10,8 @@
     <application
         android:allowBackup="false"
         android:label="CrashAI Neo"
+        android:icon="@drawable/ic_crash_plane"
+        android:roundIcon="@drawable/ic_crash_plane"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:supportsRtl="true">
 
