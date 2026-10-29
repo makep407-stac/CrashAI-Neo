@@ -6,9 +6,11 @@ from typing import List
 from fastapi import FastAPI, HTTPException
 from reverse_analysis import inspect_rounds
 from online_learning import learner
+from advanced_statistics import analyze_three_ways
+from round_storage import save_round, recent_rounds
 from pydantic import BaseModel, Field, field_validator
 
-app = FastAPI(title="CrashAI Neo API", version="0.5.0")
+app = FastAPI(title="CrashAI Neo API", version="0.6.0")
 
 
 class RoundsRequest(BaseModel):
@@ -90,7 +92,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.5.0"}
+    return {"status": "ok", "version": "0.6.0"}
 
 
 @app.post("/analyze")
@@ -133,7 +135,11 @@ class CompletedRound(BaseModel):
 @app.post("/learn-round")
 def learn_round(payload: CompletedRound):
     try:
-        return learner.add(payload.round_id, payload.final_multiplier)
+        result = learner.add(payload.round_id, payload.final_multiplier)
+        if result["status"] == "learned":
+            saved = save_round(payload.round_id, payload.final_multiplier)
+            result["saved_to_sqlite"] = saved
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -141,3 +147,20 @@ def learn_round(payload: CompletedRound):
 @app.get("/learning-status")
 def learning_status():
     return learner.status()
+
+
+@app.post("/advanced-analysis")
+def advanced_analysis(payload: RoundsRequest):
+    return analyze_three_ways(payload.rounds)
+
+
+@app.get("/round-history")
+def round_history(limit: int = 100):
+    return {"rounds": recent_rounds(limit), "storage": "sqlite",
+            "note": "Persistence across deployments requires a persistent Render disk."}
+
+
+@app.get("/analyze-stored-rounds")
+def analyze_stored_rounds(limit: int = 500):
+    rounds = [row["multiplier"] for row in recent_rounds(limit)]
+    return analyze_three_ways(rounds)
