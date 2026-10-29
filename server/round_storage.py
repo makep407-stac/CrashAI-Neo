@@ -21,6 +21,7 @@ def _connect():
         multiplier REAL NOT NULL CHECK(multiplier >= 1),
         recorded_at TEXT NOT NULL
     )""")
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_rounds_recorded_at ON rounds(recorded_at)")
     return connection
 
 def save_round(round_id, multiplier):
