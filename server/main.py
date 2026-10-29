@@ -15,7 +15,7 @@ from forecast_tracking import prepare_forecast, record_outcome, forecast_status
 from screen_reading import validate_completed_round
 from pydantic import BaseModel, Field, field_validator
 
-app = FastAPI(title="CrashAI Neo API", version="0.7.0")
+app = FastAPI(title="CrashAI Neo API", version="0.8.0")
 
 
 class RoundsRequest(BaseModel):
@@ -97,7 +97,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.7.0"}
+    return {"status": "ok", "version": "0.8.0"}
 
 
 @app.post("/analyze")
@@ -210,9 +210,9 @@ def next_estimate(limit: int = 200):
     if not 5 <= limit <= 500:
         raise HTTPException(status_code=422, detail="limit must be 30..500")
     rounds = [row["multiplier"] for row in recent_rounds(limit)]
-    if len(rounds) < 5:
-        return {"available": False, "sample_count": len(rounds),
-                "reason": "At least 5 confirmed completed rounds are required for a rough historical estimate."}
+    if len(rounds) < 20:
+        return {"available": False, "sample_count": len(rounds), "required_rounds": 20,
+                "reason": "Calibration mode: at least 20 confirmed completed rounds are required before showing estimates."}
     # Median is resistant to the extremely long upper tail of Crash multipliers.
     # Avoid an apparent high-precision prediction: two decimals are display precision only.
     baseline = median(rounds)
@@ -232,9 +232,9 @@ class PrepareRoundRequest(BaseModel):
 def prepare_round(payload: PrepareRoundRequest):
     """Store one pre-round historical estimate under the upcoming round ID."""
     rounds = [row["multiplier"] for row in recent_rounds(200)]
-    if len(rounds) < 5:
-        return {"available": False, "sample_count": len(rounds),
-                "reason": "At least 5 confirmed completed rounds are required."}
+    if len(rounds) < 20:
+        return {"available": False, "sample_count": len(rounds), "required_rounds": 20,
+                "reason": "Calibration mode: record 20 confirmed completed rounds before showing an estimate."}
     estimate = round(0.75 * median(rounds) + 0.25 * median(rounds[-min(50, len(rounds)):]), 2)
     return prepare_forecast(payload.round_id, estimate, len(rounds))
 
