@@ -8,7 +8,7 @@ public final class AnalysisState {
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("status",status).apply();
  }
  public static void updateMultiplier(Context c,double value,int count) {
-  if(Double.isNaN(value)||Double.isInfinite(value)||value<1||count<5)return;
+  if(Double.isNaN(value)||Double.isInfinite(value)||value<1||count<20)return;
   String number=String.format(java.util.Locale.US,"%.2f",value);
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("display",number).putInt("sample_count",count).apply();
  }
@@ -17,6 +17,6 @@ public final class AnalysisState {
  }
  public static String status(Context c) {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
-  return p.getString("status","بانتظار النتائج")+" • تقدير تاريخي للمضاعف، ليس تنبؤًا مثبتًا • عدد الجولات: "+p.getInt("sample_count",0);
+  return p.getString("status","جمع البيانات: يلزم حفظ 20 جولة أولاً")+" • تقدير تاريخي للمضاعف، ليس تنبؤًا مثبتًا • عدد الجولات: "+p.getInt("sample_count",0);
  }
 }
