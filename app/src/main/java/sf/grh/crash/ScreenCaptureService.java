@@ -179,12 +179,10 @@ public class ScreenCaptureService extends Service {
             }
             if (connection.getResponseCode() / 100 == 2) {
                 AnalysisState.update(this, "تم تسجيل " + multiplier + "x");
-                // Numeric overlay shows an observed historical frequency only.
-                // This is not a verified next-round probability.
                 HttpURLConnection stats = null;
                 try {
                     stats = (HttpURLConnection) new URL(
-                            "https://crashai-neo-api.onrender.com/analyze-stored-rounds?limit=500"
+                            "https://crashai-neo-api.onrender.com/next-estimate?limit=200"
                     ).openConnection();
                     stats.setConnectTimeout(1400);
                     stats.setReadTimeout(1400);
@@ -197,11 +195,11 @@ public class ScreenCaptureService extends Service {
                             while ((line = in.readLine()) != null) json.append(line);
                         }
                         JSONObject parsed = new JSONObject(json.toString());
-                        JSONObject distribution = parsed.getJSONObject("global_distribution");
-                        JSONObject threshold = parsed.getJSONObject("threshold_confidence").getJSONObject("2x");
-                        AnalysisState.updatePercentage(this,
-                                threshold.getDouble("observed_percent"),
-                                distribution.getInt("count"));
+                        if (parsed.optBoolean("available", false)) {
+                            AnalysisState.updateMultiplier(this,
+                                    parsed.getDouble("estimate_multiplier"),
+                                    parsed.getInt("sample_count"));
+                        }
                     }
                 } finally {
                     if (stats != null) stats.disconnect();
