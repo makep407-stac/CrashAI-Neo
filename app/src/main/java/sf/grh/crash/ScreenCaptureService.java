@@ -19,6 +19,7 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.io.OutputStream;
@@ -175,6 +176,33 @@ public class ScreenCaptureService extends Service {
             }
             if (connection.getResponseCode() / 100 == 2) {
                 AnalysisState.update(this, "تم تسجيل " + multiplier + "x");
+                // Numeric overlay shows an observed historical frequency only.
+                // This is not a verified next-round probability.
+                HttpURLConnection stats = null;
+                try {
+                    stats = (HttpURLConnection) new URL(
+                            "https://crashai-neo-api.onrender.com/analyze-stored-rounds?limit=500"
+                    ).openConnection();
+                    stats.setConnectTimeout(1400);
+                    stats.setReadTimeout(1400);
+                    if (stats.getResponseCode() == 200) {
+                        StringBuilder json = new StringBuilder();
+                        try (BufferedReader in = new BufferedReader(
+                                new InputStreamReader(stats.getInputStream(),
+                                        java.nio.charset.StandardCharsets.UTF_8))) {
+                            String line;
+                            while ((line = in.readLine()) != null) json.append(line);
+                        }
+                        JSONObject parsed = new JSONObject(json.toString());
+                        JSONObject distribution = parsed.getJSONObject("global_distribution");
+                        JSONObject threshold = parsed.getJSONObject("threshold_confidence").getJSONObject("2x");
+                        AnalysisState.updatePercentage(this,
+                                threshold.getDouble("observed_percent"),
+                                distribution.getInt("count"));
+                    }
+                } finally {
+                    if (stats != null) stats.disconnect();
+                }
             }
         } catch (Exception ignored) {
             AnalysisState.update(this, "قراءة " + multiplier + "x — الخادم غير متاح");
