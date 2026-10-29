@@ -205,12 +205,12 @@ def login(payload: LoginRequest):
 @app.get("/next-estimate")
 def next_estimate(limit: int = 200):
     """Descriptive robust point estimate; NOT a validated prediction of the next Crash outcome."""
-    if not 30 <= limit <= 500:
+    if not 5 <= limit <= 500:
         raise HTTPException(status_code=422, detail="limit must be 30..500")
     rounds = [row["multiplier"] for row in recent_rounds(limit)]
-    if len(rounds) < 30:
+    if len(rounds) < 5:
         return {"available": False, "sample_count": len(rounds),
-                "reason": "At least 30 confirmed completed rounds are required."}
+                "reason": "At least 5 confirmed completed rounds are required for a rough historical estimate."}
     # Median is resistant to the extremely long upper tail of Crash multipliers.
     # Avoid an apparent high-precision prediction: two decimals are display precision only.
     baseline = median(rounds)
