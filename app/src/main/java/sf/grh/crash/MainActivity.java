@@ -2,6 +2,8 @@ package sf.grh.crash;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.Context;
+import android.media.projection.MediaProjectionManager;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -30,6 +32,8 @@ public class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(120, 145, 175);
 
     private static final int OVERLAY_PERMISSION_REQUEST = 701;
+    private static final int CAPTURE_PERMISSION_REQUEST = 702;
+    private TextView analysisLabel;
 
     private static final String PREFS_NAME = "crashai_session";
     private static final String KEY_LOGGED_IN = "logged_in";
@@ -315,9 +319,8 @@ public class MainActivity extends Activity {
 
         center.addView(innerCircle, innerParams);
 
-        TextView core = makeLabel(
-                "AI", 32, BLUE, true
-        );
+        analysisLabel = makeLabel(AnalysisState.current(this), 14, BLUE, true);
+        TextView core = analysisLabel;
 
         FrameLayout.LayoutParams coreParams =
                 new FrameLayout.LayoutParams(dp(100), dp(100));
@@ -341,6 +344,21 @@ public class MainActivity extends Activity {
 
         root.addView(center, centerParams);
 
+        TextView captureButton = makeLabel("بدء قراءة الشاشة", 16, Color.WHITE, true);
+        captureButton.setBackground(makeShape(BLUE, BLUE, 1));
+        FrameLayout.LayoutParams captureParams = new FrameLayout.LayoutParams(dp(220), dp(50));
+        captureParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        captureParams.bottomMargin = dp(85);
+        root.addView(captureButton, captureParams);
+        captureButton.setOnClickListener(v -> requestScreenCapture());
+
+        TextView stopButton = makeLabel("إيقاف المراقبة", 13, MUTED, false);
+        FrameLayout.LayoutParams stopParams = new FrameLayout.LayoutParams(dp(200), dp(44));
+        stopParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        stopParams.bottomMargin = dp(30);
+        root.addView(stopButton, stopParams);
+        stopButton.setOnClickListener(v -> stopService(new Intent(this, ScreenCaptureService.class)));
+
         setContentView(root);
 
         checkServerHealth();
@@ -354,6 +372,7 @@ public class MainActivity extends Activity {
         );
 
         stopService(serviceIntent);
+        stopService(new Intent(this, ScreenCaptureService.class));
 
         // مسح حالة الجلسة المحفوظة.
         preferences.edit()
@@ -395,6 +414,18 @@ public class MainActivity extends Activity {
 
         super.onActivityResult(requestCode, resultCode, data);
 
+        if (requestCode == CAPTURE_PERMISSION_REQUEST) {
+            if (resultCode == RESULT_OK && data != null) {
+                Intent capture = new Intent(this, ScreenCaptureService.class);
+                capture.putExtra("result_code", resultCode);
+                capture.putExtra("projection_data", data);
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(capture);
+                else startService(capture);
+            } else {
+                Toast.makeText(this, "يمكنك استخدام التطبيق بدون تسجيل الشاشة", Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (requestCode == OVERLAY_PERMISSION_REQUEST) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                     || Settings.canDrawOverlays(this)) {
@@ -409,6 +440,17 @@ public class MainActivity extends Activity {
                 ).show();
             }
         }
+    }
+
+    private void requestScreenCapture() {
+        MediaProjectionManager manager = (MediaProjectionManager)
+                getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        startActivityForResult(manager.createScreenCaptureIntent(), CAPTURE_PERMISSION_REQUEST);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (analysisLabel != null) analysisLabel.setText(AnalysisState.current(this));
     }
 
     private void startFloatingService() {
