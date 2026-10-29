@@ -415,12 +415,17 @@ public class MainActivity extends Activity {
         root.addView(captureButton, captureParams);
         captureButton.setOnClickListener(v -> requestScreenCapture());
 
-        TextView stopButton = makeLabel("إيقاف المراقبة", 13, MUTED, false);
+        TextView stopButton = makeLabel("إيقاف تسجيل الشاشة", 15, Color.WHITE, true);
+        stopButton.setBackground(makeShape(Color.rgb(150, 35, 45), Color.rgb(230, 70, 80), 1));
         FrameLayout.LayoutParams stopParams = new FrameLayout.LayoutParams(dp(200), dp(44));
         stopParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         stopParams.bottomMargin = dp(30);
         root.addView(stopButton, stopParams);
-        stopButton.setOnClickListener(v -> stopService(new Intent(this, ScreenCaptureService.class)));
+        stopButton.setOnClickListener(v -> {
+            stopService(new Intent(this, ScreenCaptureService.class));
+            AnalysisState.update(this, "تم إيقاف تسجيل الشاشة");
+            Toast.makeText(this, "تم إيقاف تسجيل الشاشة", Toast.LENGTH_SHORT).show();
+        });
 
         setContentView(root);
 
