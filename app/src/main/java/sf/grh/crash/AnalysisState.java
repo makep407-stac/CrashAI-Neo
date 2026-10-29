@@ -8,7 +8,7 @@ public final class AnalysisState {
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("status",status).apply();
  }
  public static void updateMultiplier(Context c,double value,int count) {
-  if(!Double.isFinite(value)||value<1||count<30)return;
+  if(Double.isNaN(value)||Double.isInfinite(value)||value<1||count<30)return;
   String number=String.format(java.util.Locale.US,"%.2f",value);
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("display",number).putInt("sample_count",count).apply();
  }
