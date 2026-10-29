@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <application
         android:allowBackup="false"
@@ -34,6 +35,7 @@
 
         </service>
 
+        <service android:name=".ScreenCaptureService" android:exported="false" android:foregroundServiceType="mediaProjection" />
     </application>
 
 </manifest>
