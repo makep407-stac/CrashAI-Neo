@@ -1,6 +1,7 @@
 package sf.grh.crash;
 
 import android.app.*;
+import android.app.PendingIntent;
 import android.content.*;
 import android.graphics.*;
 import android.hardware.display.DisplayManager;
@@ -59,8 +60,9 @@ public class ScreenCaptureService extends Service {
                 : new Notification.Builder(this);
         Notification notification = notificationBuilder
                 .setContentTitle("CrashAI Neo")
-                .setContentText("تحليل الشاشة جارٍ — أوقفه من التطبيق")
+                .setContentText("قراءة الشاشة تعمل — يمكنك إيقافها من هنا")
                 .setSmallIcon(android.R.drawable.ic_menu_view)
+                .addAction(android.R.drawable.ic_media_pause, "إيقاف القراءة", stopCapturePendingIntent())
                 .setOngoing(true).build();
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(1002, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
@@ -69,6 +71,14 @@ public class ScreenCaptureService extends Service {
         workerThread.start();
         worker = new Handler(workerThread.getLooper());
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+    }
+
+    private PendingIntent stopCapturePendingIntent() {
+        Intent stopIntent = new Intent(this, ScreenCaptureService.class);
+        stopIntent.setAction(ACTION_STOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
+        return PendingIntent.getService(this, 1003, stopIntent, flags);
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -122,7 +132,7 @@ public class ScreenCaptureService extends Service {
             padded.recycle();
             processing = true;
             recognizer.process(InputImage.fromBitmap(frame, 0))
-                    .addOnSuccessListener(result -> interpret(result.getText()))
+                    .addOnSuccessListener(result -> interpret(result))
                     .addOnFailureListener(e -> AnalysisState.update(this, "خطأ في قراءة الشاشة"))
                     .addOnCompleteListener(task -> { processing = false; frame.recycle(); });
         } catch (Exception e) {
@@ -132,26 +142,40 @@ public class ScreenCaptureService extends Service {
         }
     }
 
-    private void interpret(String text) {
-        // Avoid treating a live in-flight multiplier as a final round.
+    private void interpret(com.google.mlkit.vision.text.Text textResult) {
+        // OCR runs privately in the service. Prefer the largest multiplier text line,
+        // usually the live round value rather than small history labels.
+        String text = textResult.getText();
         String lower = text.toLowerCase(java.util.Locale.ROOT);
         boolean countdown = lower.contains("place your bets") || lower.contains("ضع رهان") || lower.contains("next round");
         boolean finished = lower.contains("flew away") || lower.contains("crashed") || lower.contains("طار") || lower.contains("انفجر");
-        Matcher match = MULTIPLIER.matcher(text);
         String found = null;
-        while (match.find()) found = match.group(1).replace(',', '.');
+        long largestArea = -1;
+        for (com.google.mlkit.vision.text.Text.TextBlock block : textResult.getTextBlocks()) {
+            for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
+                Matcher lineMatch = MULTIPLIER.matcher(line.getText());
+                while (lineMatch.find()) {
+                    android.graphics.Rect bounds = line.getBoundingBox();
+                    long area = bounds == null ? 0L : (long) bounds.width() * bounds.height();
+                    if (area > largestArea) {
+                        largestArea = area;
+                        found = lineMatch.group(1).replace(',', '.');
+                    }
+                }
+            }
+        }
         if (countdown) phase = "countdown";
         else if (finished) phase = "finished";
         else if (found != null) phase = "flying";
         if (found == null) {
-            if (countdown) AnalysisState.update(this, "العد التنازلي");
+            previousReading = "";
+            sameReadings = 0;
             return;
         }
         if (found.equals(previousReading)) sameReadings++;
         else { previousReading = found; sameReadings = 1; }
-        AnalysisState.update(this, (finished ? "نهاية " : "مرصود ") + found + "x");
-        // A final marker and two agreeing frames are required; no invented predictions.
-        if (finished && sameReadings >= 2 && (!found.equals(lastRecorded) ||
+        // Three consecutive matching OCR frames help reject single-frame digit errors.
+        if (finished && sameReadings >= 3 && (!found.equals(lastRecorded) ||
                 SystemClock.elapsedRealtime() - lastRecordedAt > 12000)) {
             lastRecorded = found;
             lastRecordedAt = SystemClock.elapsedRealtime();
