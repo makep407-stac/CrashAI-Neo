@@ -54,7 +54,10 @@ public class ScreenCaptureService extends Service {
                     NotificationManager.IMPORTANCE_LOW);
             ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
         }
-        Notification notification = new Notification.Builder(this, Build.VERSION.SDK_INT >= 26 ? CHANNEL : "")
+        Notification.Builder notificationBuilder = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(this, CHANNEL)
+                : new Notification.Builder(this);
+        Notification notification = notificationBuilder
                 .setContentTitle("CrashAI Neo")
                 .setContentText("تحليل الشاشة جارٍ — أوقفه من التطبيق")
                 .setSmallIcon(android.R.drawable.ic_menu_view)
