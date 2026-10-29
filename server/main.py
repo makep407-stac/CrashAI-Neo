@@ -8,9 +8,10 @@ from reverse_analysis import inspect_rounds
 from online_learning import learner
 from advanced_statistics import analyze_three_ways
 from round_storage import save_round, recent_rounds
+from screen_reading import validate_completed_round
 from pydantic import BaseModel, Field, field_validator
 
-app = FastAPI(title="CrashAI Neo API", version="0.6.0")
+app = FastAPI(title="CrashAI Neo API", version="0.7.0")
 
 
 class RoundsRequest(BaseModel):
@@ -92,7 +93,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.6.0"}
+    return {"status": "ok", "version": "0.7.0"}
 
 
 @app.post("/analyze")
@@ -164,3 +165,14 @@ def round_history(limit: int = 100):
 def analyze_stored_rounds(limit: int = 500):
     rounds = [row["multiplier"] for row in recent_rounds(limit)]
     return analyze_three_ways(rounds)
+
+
+class ScreenFramesRequest(BaseModel):
+    round_id: str = Field(min_length=1, max_length=128)
+    phase: str
+    frames: List[str] = Field(min_length=1, max_length=10)
+
+
+@app.post("/validate-screen-frames")
+def validate_screen_frames(payload: ScreenFramesRequest):
+    return validate_completed_round(payload.round_id, payload.frames, payload.phase)
