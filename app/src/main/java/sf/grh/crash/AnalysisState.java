@@ -13,7 +13,7 @@ public final class AnalysisState {
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("display",number).putInt("sample_count",count).apply();
  }
  public static String current(Context c) {
-  return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getString("display","—");
+  return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getString("display","");
  }
  public static String status(Context c) {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
