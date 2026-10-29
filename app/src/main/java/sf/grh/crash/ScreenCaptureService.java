@@ -198,6 +198,7 @@ public class ScreenCaptureService extends Service {
                 final String completed = lastLiveReading;
                 final String completedRoundId = currentRoundId;
                 worker.post(() -> sendConfirmed(completed, completedRoundId));
+                currentRoundId = "";
                 phase = "finished";
                 lastLiveReading = "";
             }
@@ -218,6 +219,7 @@ public class ScreenCaptureService extends Service {
             final String completed = found;
             final String completedRoundId = currentRoundId;
             worker.post(() -> sendConfirmed(completed, completedRoundId));
+            currentRoundId = "";
             lastLiveReading = "";
         }
     }
