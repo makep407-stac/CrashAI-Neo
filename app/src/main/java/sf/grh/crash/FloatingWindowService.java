@@ -10,6 +10,9 @@ import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.TextView;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -22,7 +25,14 @@ public class FloatingWindowService extends Service {
     private static final String CHANNEL_ID = "floating_overlay_channel";
 
     private WindowManager windowManager;
-    private View floatingCircle;
+    private TextView floatingCircle;
+    private final Handler displayHandler = new Handler(Looper.getMainLooper());
+    private final Runnable refresh = new Runnable() {
+        @Override public void run() {
+            if (floatingCircle != null) floatingCircle.setText(AnalysisState.current(FloatingWindowService.this));
+            displayHandler.postDelayed(this, 700);
+        }
+    };
     private WindowManager.LayoutParams params;
     private ScaleGestureDetector scaleDetector;
 
@@ -46,7 +56,12 @@ public class FloatingWindowService extends Service {
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        floatingCircle = new View(this);
+        floatingCircle = new TextView(this);
+        floatingCircle.setText(AnalysisState.current(this));
+        floatingCircle.setTextColor(Color.WHITE);
+        floatingCircle.setTextSize(11);
+        floatingCircle.setGravity(Gravity.CENTER);
+        floatingCircle.setPadding(dp(5), dp(5), dp(5), dp(5));
         floatingCircle.setBackground(createCircle());
 
         int overlayType;
@@ -127,6 +142,7 @@ public class FloatingWindowService extends Service {
 
         try {
             windowManager.addView(floatingCircle, params);
+            displayHandler.post(refresh);
         } catch (Exception e) {
             stopSelf();
         }
@@ -209,6 +225,7 @@ public class FloatingWindowService extends Service {
 
     @Override
     public void onDestroy() {
+        displayHandler.removeCallbacks(refresh);
         if (floatingCircle != null && windowManager != null) {
             try {
                 if (floatingCircle.isAttachedToWindow()) {
