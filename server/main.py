@@ -200,3 +200,23 @@ def login(payload: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid account ID or app code.")
     return {"authorized": True, "provider_account_verified": False,
             "message": "Application access granted; no 1xBet account linkage."}
+
+
+@app.get("/next-estimate")
+def next_estimate(limit: int = 200):
+    """Descriptive robust point estimate; NOT a validated prediction of the next Crash outcome."""
+    if not 30 <= limit <= 500:
+        raise HTTPException(status_code=422, detail="limit must be 30..500")
+    rounds = [row["multiplier"] for row in recent_rounds(limit)]
+    if len(rounds) < 30:
+        return {"available": False, "sample_count": len(rounds),
+                "reason": "At least 30 confirmed completed rounds are required."}
+    # Median is resistant to the extremely long upper tail of Crash multipliers.
+    # Avoid an apparent high-precision prediction: two decimals are display precision only.
+    baseline = median(rounds)
+    recent = median(rounds[-min(50, len(rounds)):])
+    estimate = round(0.75 * baseline + 0.25 * recent, 2)
+    return {"available": True, "estimate_multiplier": estimate,
+            "sample_count": len(rounds), "method": "robust_historical_median_blend",
+            "validated_next_round_prediction": False,
+            "note": "Historical point estimate only; no demonstrated predictive power."}
