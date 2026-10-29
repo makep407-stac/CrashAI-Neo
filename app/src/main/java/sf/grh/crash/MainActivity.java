@@ -210,7 +210,7 @@ public class MainActivity extends Activity {
         root.addView(pin, pinParams);
 
         TextView note = makeLabel(
-                "رمز التطبيق للتحقق المحلي فقط",
+                "التحقق عبر خادم CrashAI Neo، وليس تسجيل دخول 1xBet",
                 12,
                 MUTED,
                 false
@@ -242,13 +242,14 @@ public class MainActivity extends Activity {
             new Thread(() -> {
                 HttpURLConnection connection = null;
                 boolean authorized = false;
+                String errorMessage = "تعذر الاتصال بالخادم. تحقق من Render والإنترنت.";
                 try {
                     URL url = new URL("https://crashai-neo-api.onrender.com/login");
                     connection = (HttpURLConnection)url.openConnection();
                     connection.setRequestMethod("POST");
                     connection.setDoOutput(true);
-                    connection.setConnectTimeout(4000);
-                    connection.setReadTimeout(4000);
+                    connection.setConnectTimeout(20000);
+                    connection.setReadTimeout(20000);
                     connection.setRequestProperty("Content-Type", "application/json");
                     JSONObject body = new JSONObject();
                     body.put("account_id", accountText);
@@ -256,14 +257,25 @@ public class MainActivity extends Activity {
                     try (OutputStream output = connection.getOutputStream()) {
                         output.write(body.toString().getBytes("UTF-8"));
                     }
-                    if (connection.getResponseCode() == 200) {
+                    int statusCode = connection.getResponseCode();
+                    if (statusCode == 200) {
                         authorized = true;
+                    } else if (statusCode == 401) {
+                        errorMessage = "معرّف التطبيق أو رمزه غير صحيح.";
+                    } else if (statusCode == 503) {
+                        errorMessage = "تسجيل الدخول غير مهيأ على خادم Render.";
+                    } else if (statusCode == 404) {
+                        errorMessage = "مسار تسجيل الدخول غير موجود: انشر أحدث نسخة من الخادم.";
+                    } else {
+                        errorMessage = "الخادم رفض الطلب. رمز HTTP: " + statusCode;
                     }
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    errorMessage = "تعذر الوصول للخادم: " + e.getClass().getSimpleName();
                 } finally {
                     if (connection != null) connection.disconnect();
                 }
                 final boolean success = authorized;
+                final String finalError = errorMessage;
                 runOnUiThread(() -> {
                     login.setEnabled(true);
                     login.setText("دخول");
@@ -271,7 +283,7 @@ public class MainActivity extends Activity {
                         preferences.edit().putBoolean(KEY_LOGGED_IN, true).apply();
                         showDashboard();
                     } else {
-                        Toast.makeText(this, "البيانات غير صحيحة أو الخادم غير متاح", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, finalError, Toast.LENGTH_LONG).show();
                     }
                 });
             }).start();
