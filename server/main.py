@@ -1,4 +1,7 @@
 from math import isfinite, sqrt
+import os
+import hmac
+import hashlib
 from statistics import mean, median, pstdev
 from time import perf_counter
 from typing import List
@@ -176,3 +179,24 @@ class ScreenFramesRequest(BaseModel):
 @app.post("/validate-screen-frames")
 def validate_screen_frames(payload: ScreenFramesRequest):
     return validate_completed_round(payload.round_id, payload.frames, payload.phase)
+
+
+class LoginRequest(BaseModel):
+    account_id: str = Field(min_length=1, max_length=64)
+    app_code: str = Field(min_length=1, max_length=128)
+
+
+@app.post("/login")
+def login(payload: LoginRequest):
+    # These are application access controls, NOT 1xBet account authentication.
+    allowed_id = os.environ.get("CRASHAI_ALLOWED_ACCOUNT_ID", "")
+    expected_hash = os.environ.get("CRASHAI_APP_CODE_SHA256", "")
+    if not allowed_id or len(expected_hash) != 64:
+        raise HTTPException(status_code=503, detail="Application login is not configured.")
+    supplied_hash = hashlib.sha256(payload.app_code.encode("utf-8")).hexdigest()
+    account_ok = hmac.compare_digest(payload.account_id.strip(), allowed_id)
+    code_ok = hmac.compare_digest(supplied_hash, expected_hash.lower())
+    if not (account_ok and code_ok):
+        raise HTTPException(status_code=401, detail="Invalid account ID or app code.")
+    return {"authorized": True, "provider_account_verified": False,
+            "message": "Application access granted; no 1xBet account linkage."}
