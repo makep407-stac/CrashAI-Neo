@@ -370,7 +370,7 @@ public class MainActivity extends Activity {
 
         center.addView(innerCircle, innerParams);
 
-        analysisLabel = makeLabel(AnalysisState.current(this), 14, BLUE, true);
+        analysisLabel = makeLabel(AnalysisState.status(this), 14, BLUE, true);
         TextView core = analysisLabel;
 
         FrameLayout.LayoutParams coreParams =
@@ -502,7 +502,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        if (analysisLabel != null) analysisLabel.setText(AnalysisState.current(this));
+        if (analysisLabel != null) analysisLabel.setText(AnalysisState.status(this));
     }
 
     private void startFloatingService() {
