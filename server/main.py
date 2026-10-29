@@ -3,11 +3,12 @@ from statistics import mean, median, pstdev
 from time import perf_counter
 from typing import List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from reverse_analysis import inspect_rounds
+from online_learning import learner
 from pydantic import BaseModel, Field, field_validator
 
-app = FastAPI(title="CrashAI Neo API", version="0.4.0")
+app = FastAPI(title="CrashAI Neo API", version="0.5.0")
 
 
 class RoundsRequest(BaseModel):
@@ -89,7 +90,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.4.0"}
+    return {"status": "ok", "version": "0.5.0"}
 
 
 @app.post("/analyze")
@@ -122,3 +123,21 @@ def analyze_screen_readings(payload: ScreenReadingsRequest):
 @app.post("/reverse-analysis")
 def reverse_analysis(payload: RoundsRequest):
     return inspect_rounds(payload.rounds)
+
+
+class CompletedRound(BaseModel):
+    round_id: str = Field(min_length=1, max_length=128)
+    final_multiplier: float
+
+
+@app.post("/learn-round")
+def learn_round(payload: CompletedRound):
+    try:
+        return learner.add(payload.round_id, payload.final_multiplier)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/learning-status")
+def learning_status():
+    return learner.status()
