@@ -3,6 +3,8 @@ package sf.grh.crash;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.media.projection.MediaProjectionManager;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -58,7 +60,9 @@ public class MainActivity extends Activity {
                 MODE_PRIVATE
         );
 
-        if (preferences.getBoolean(KEY_LOGGED_IN, false)) {
+        if (!hasInternet()) {
+            showOffline();
+        } else if (preferences.getBoolean(KEY_LOGGED_IN, false)) {
             showDashboard();
         } else {
             showLogin();
@@ -147,7 +151,29 @@ public class MainActivity extends Activity {
         return layout;
     }
 
+    private boolean hasInternet() {
+        ConnectivityManager manager = (ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
+        NetworkInfo network = manager == null ? null : manager.getActiveNetworkInfo();
+        return network != null && network.isConnected();
+    }
+
+    private void showOffline() {
+        LinearLayout root = newPage();
+        TextView message = makeLabel("CrashAI Neo\\nيلزم اتصال بالإنترنت للتشغيل", 19, Color.WHITE, true);
+        root.addView(message, lp(-1, 140));
+        TextView retry = makeLabel("إعادة المحاولة", 17, BLUE, true);
+        root.addView(retry, lp(-1, 60));
+        retry.setOnClickListener(v -> {
+            if (!hasInternet()) {
+                Toast.makeText(this, "لا يوجد اتصال بالإنترنت", Toast.LENGTH_SHORT).show();
+            } else if (preferences.getBoolean(KEY_LOGGED_IN, false)) showDashboard();
+            else showLogin();
+        });
+        setContentView(root);
+    }
+
     private void showLogin() {
+        if (!hasInternet()) { showOffline(); return; }
         LinearLayout root = newPage();
 
         TextView logo = makeLabel(
@@ -231,6 +257,7 @@ public class MainActivity extends Activity {
     }
 
     private void showDashboard() {
+        if (!hasInternet()) { showOffline(); return; }
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(BG);
 
@@ -443,6 +470,7 @@ public class MainActivity extends Activity {
     }
 
     private void requestScreenCapture() {
+        if (!hasInternet()) { showOffline(); return; }
         MediaProjectionManager manager = (MediaProjectionManager)
                 getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         startActivityForResult(manager.createScreenCaptureIntent(), CAPTURE_PERMISSION_REQUEST);
@@ -454,6 +482,7 @@ public class MainActivity extends Activity {
     }
 
     private void startFloatingService() {
+        if (!hasInternet()) { showOffline(); return; }
         Intent intent = new Intent(
                 MainActivity.this,
                 FloatingWindowService.class
