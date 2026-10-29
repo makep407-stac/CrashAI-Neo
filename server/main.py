@@ -4,9 +4,10 @@ from time import perf_counter
 from typing import List
 
 from fastapi import FastAPI
+from reverse_analysis import inspect_rounds
 from pydantic import BaseModel, Field, field_validator
 
-app = FastAPI(title="CrashAI Neo API", version="0.3.0")
+app = FastAPI(title="CrashAI Neo API", version="0.4.0")
 
 
 class RoundsRequest(BaseModel):
@@ -88,7 +89,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.3.0"}
+    return {"status": "ok", "version": "0.4.0"}
 
 
 @app.post("/analyze")
@@ -116,3 +117,8 @@ def analyze_screen_readings(payload: ScreenReadingsRequest):
         "analysis": summarize(clean) if clean else None,
         "note": "Send only one final multiplier per completed round."
     }
+
+
+@app.post("/reverse-analysis")
+def reverse_analysis(payload: RoundsRequest):
+    return inspect_rounds(payload.rounds)
