@@ -26,6 +26,8 @@ import android.widget.Toast;
 
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.io.OutputStream;
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
 
@@ -38,7 +40,7 @@ public class MainActivity extends Activity {
     private TextView analysisLabel;
 
     private static final String PREFS_NAME = "crashai_session";
-    private static final String KEY_LOGGED_IN = "logged_in";
+    private static final String KEY_LOGGED_IN = "verified_login_v2";
 
     private SharedPreferences preferences;
 
@@ -228,29 +230,51 @@ public class MainActivity extends Activity {
         root.addView(login, loginParams);
 
         login.setOnClickListener(v -> {
-            String accountText =
-                    account.getText().toString().trim();
-
-            String pinText =
-                    pin.getText().toString();
-
+            String accountText = account.getText().toString().trim();
+            String pinText = pin.getText().toString();
             if (accountText.isEmpty() || pinText.isEmpty()) {
-                Toast.makeText(
-                        this,
-                        "أدخل المعرّف والرمز للمتابعة",
-                        Toast.LENGTH_SHORT
-                ).show();
-
+                Toast.makeText(this, "أدخل المعرّف والرمز", Toast.LENGTH_SHORT).show();
                 return;
             }
-
-            // حفظ حالة الجلسة محليًا فقط.
-            // لا نحفظ الرمز ولا نتحقق من حساب 1xBet.
-            preferences.edit()
-                    .putBoolean(KEY_LOGGED_IN, true)
-                    .apply();
-
-            showDashboard();
+            if (!hasInternet()) { showOffline(); return; }
+            login.setEnabled(false);
+            login.setText("جارٍ التحقق...");
+            new Thread(() -> {
+                HttpURLConnection connection = null;
+                boolean authorized = false;
+                try {
+                    URL url = new URL("https://crashai-neo-api.onrender.com/login");
+                    connection = (HttpURLConnection)url.openConnection();
+                    connection.setRequestMethod("POST");
+                    connection.setDoOutput(true);
+                    connection.setConnectTimeout(4000);
+                    connection.setReadTimeout(4000);
+                    connection.setRequestProperty("Content-Type", "application/json");
+                    JSONObject body = new JSONObject();
+                    body.put("account_id", accountText);
+                    body.put("app_code", pinText);
+                    try (OutputStream output = connection.getOutputStream()) {
+                        output.write(body.toString().getBytes("UTF-8"));
+                    }
+                    if (connection.getResponseCode() == 200) {
+                        authorized = true;
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    if (connection != null) connection.disconnect();
+                }
+                final boolean success = authorized;
+                runOnUiThread(() -> {
+                    login.setEnabled(true);
+                    login.setText("دخول");
+                    if (success) {
+                        preferences.edit().putBoolean(KEY_LOGGED_IN, true).apply();
+                        showDashboard();
+                    } else {
+                        Toast.makeText(this, "البيانات غير صحيحة أو الخادم غير متاح", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }).start();
         });
 
         setContentView(root);
