@@ -174,7 +174,9 @@ public class ScreenCaptureService extends Service {
                 lastRecorded = lastLiveReading;
                 lastRecordedAt = SystemClock.elapsedRealtime();
                 final String completed = lastLiveReading;
-                worker.post(() -> sendConfirmed(completed));
+                final String completedRoundId = currentRoundId;
+                currentRoundId = "";
+                worker.post(() -> sendConfirmed(completed, completedRoundId));
             }
             lastLiveReading = "";
             previousReading = "";
@@ -188,7 +190,8 @@ public class ScreenCaptureService extends Service {
                 lastRecorded = lastLiveReading;
                 lastRecordedAt = SystemClock.elapsedRealtime();
                 final String completed = lastLiveReading;
-                worker.post(() -> sendConfirmed(completed));
+                final String completedRoundId = currentRoundId;
+                worker.post(() -> sendConfirmed(completed, completedRoundId));
                 phase = "finished";
                 lastLiveReading = "";
             }
@@ -207,17 +210,18 @@ public class ScreenCaptureService extends Service {
             lastRecorded = found;
             lastRecordedAt = SystemClock.elapsedRealtime();
             final String completed = found;
-            worker.post(() -> sendConfirmed(completed));
+            final String completedRoundId = currentRoundId;
+            worker.post(() -> sendConfirmed(completed, completedRoundId));
             lastLiveReading = "";
         }
     }
 
-    private void sendConfirmed(String multiplier) {
+    private void sendConfirmed(String multiplier, String roundId) {
         HttpURLConnection connection = null;
         try {
             double value = Double.parseDouble(multiplier);
             JSONObject body = new JSONObject();
-            body.put("round_id", "screen-" + System.currentTimeMillis());
+            body.put("round_id", roundId == null || roundId.isEmpty() ? "screen-" + System.currentTimeMillis() : roundId);
             body.put("final_multiplier", value);
             URL url = new URL("https://crashai-neo-api.onrender.com/learn-round");
             connection = (HttpURLConnection)url.openConnection();
