@@ -48,6 +48,7 @@ public class ScreenCaptureService extends Service {
     private String phase = "unknown";
     private String lastLiveReading = "";
     private long lastFrameAt;
+    private String currentRoundId = "";
 
     @Override public void onCreate() {
         super.onCreate();
@@ -174,7 +175,14 @@ public class ScreenCaptureService extends Service {
                 lastRecorded = lastLiveReading;
                 lastRecordedAt = SystemClock.elapsedRealtime();
                 final String completed = lastLiveReading;
-                worker.post(() -> sendConfirmed(completed));
+                final String completedRoundId = currentRoundId;
+                currentRoundId = "";
+                worker.post(() -> sendConfirmed(completed, completedRoundId));
+            }
+            if (currentRoundId.isEmpty()) {
+                currentRoundId = "screen-" + System.currentTimeMillis();
+                final String upcomingId = currentRoundId;
+                worker.post(() -> requestForecast(upcomingId));
             }
             lastLiveReading = "";
             previousReading = "";
@@ -188,7 +196,9 @@ public class ScreenCaptureService extends Service {
                 lastRecorded = lastLiveReading;
                 lastRecordedAt = SystemClock.elapsedRealtime();
                 final String completed = lastLiveReading;
-                worker.post(() -> sendConfirmed(completed));
+                final String completedRoundId = currentRoundId;
+                worker.post(() -> sendConfirmed(completed, completedRoundId));
+                currentRoundId = "";
                 phase = "finished";
                 lastLiveReading = "";
             }
@@ -207,17 +217,50 @@ public class ScreenCaptureService extends Service {
             lastRecorded = found;
             lastRecordedAt = SystemClock.elapsedRealtime();
             final String completed = found;
-            worker.post(() -> sendConfirmed(completed));
+            final String completedRoundId = currentRoundId;
+            worker.post(() -> sendConfirmed(completed, completedRoundId));
+            currentRoundId = "";
             lastLiveReading = "";
         }
     }
 
-    private void sendConfirmed(String multiplier) {
+    private void requestForecast(String roundId) {
+        HttpURLConnection connection = null;
+        try {
+            JSONObject body = new JSONObject();
+            body.put("round_id", roundId);
+            connection = (HttpURLConnection) new URL("https://crashai-neo-api.onrender.com/prepare-round").openConnection();
+            connection.setRequestMethod("POST");
+            connection.setDoOutput(true);
+            connection.setConnectTimeout(2500);
+            connection.setReadTimeout(2500);
+            connection.setRequestProperty("Content-Type", "application/json");
+            try (OutputStream out = connection.getOutputStream()) {
+                out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            if (connection.getResponseCode() == 200) {
+                StringBuilder json = new StringBuilder();
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = in.readLine()) != null) json.append(line);
+                }
+                JSONObject parsed = new JSONObject(json.toString());
+                if (parsed.optBoolean("available", false) && roundId.equals(currentRoundId)) {
+                    AnalysisState.updateMultiplier(this, parsed.getDouble("estimate_multiplier"), parsed.optInt("sample_count", 0));
+                }
+            }
+        } catch (Exception ignored) {
+            // Keep OCR running when the estimate endpoint is unavailable.
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+    private void sendConfirmed(String multiplier, String roundId) {
         HttpURLConnection connection = null;
         try {
             double value = Double.parseDouble(multiplier);
             JSONObject body = new JSONObject();
-            body.put("round_id", "screen-" + System.currentTimeMillis());
+            body.put("round_id", roundId == null || roundId.isEmpty() ? "screen-" + System.currentTimeMillis() : roundId);
             body.put("final_multiplier", value);
             URL url = new URL("https://crashai-neo-api.onrender.com/learn-round");
             connection = (HttpURLConnection)url.openConnection();

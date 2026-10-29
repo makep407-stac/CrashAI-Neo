@@ -11,6 +11,7 @@ from reverse_analysis import inspect_rounds
 from online_learning import learner
 from advanced_statistics import analyze_three_ways
 from round_storage import save_round, recent_rounds
+from forecast_tracking import prepare_forecast, record_outcome, forecast_status
 from screen_reading import validate_completed_round
 from pydantic import BaseModel, Field, field_validator
 
@@ -143,6 +144,7 @@ def learn_round(payload: CompletedRound):
         if result["status"] == "learned":
             saved = save_round(payload.round_id, payload.final_multiplier)
             result["saved_to_sqlite"] = saved
+            result["forecast_evaluation"] = record_outcome(payload.round_id, payload.final_multiplier)
         return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -220,3 +222,23 @@ def next_estimate(limit: int = 200):
             "sample_count": len(rounds), "method": "robust_historical_median_blend",
             "validated_next_round_prediction": False,
             "note": "Historical point estimate only; no demonstrated predictive power."}
+
+
+class PrepareRoundRequest(BaseModel):
+    round_id: str = Field(min_length=1, max_length=128)
+
+
+@app.post("/prepare-round")
+def prepare_round(payload: PrepareRoundRequest):
+    """Store one pre-round historical estimate under the upcoming round ID."""
+    rounds = [row["multiplier"] for row in recent_rounds(200)]
+    if len(rounds) < 5:
+        return {"available": False, "sample_count": len(rounds),
+                "reason": "At least 5 confirmed completed rounds are required."}
+    estimate = round(0.75 * median(rounds) + 0.25 * median(rounds[-min(50, len(rounds)):]), 2)
+    return prepare_forecast(payload.round_id, estimate, len(rounds))
+
+
+@app.get("/forecast-status")
+def get_forecast_status():
+    return forecast_status()
