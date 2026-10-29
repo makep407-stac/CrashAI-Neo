@@ -59,7 +59,7 @@ public class FloatingWindowService extends Service {
         floatingCircle = new TextView(this);
         floatingCircle.setText(AnalysisState.current(this));
         floatingCircle.setTextColor(Color.WHITE);
-        floatingCircle.setTextSize(11);
+        floatingCircle.setTextSize(22);
         floatingCircle.setGravity(Gravity.CENTER);
         floatingCircle.setPadding(dp(5), dp(5), dp(5), dp(5));
         floatingCircle.setBackground(createCircle());
