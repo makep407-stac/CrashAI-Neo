@@ -107,7 +107,7 @@ public class ScreenCaptureService extends Service {
             display = projection.createVirtualDisplay("CrashAI screen", width, height,
                     metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                     reader.getSurface(), null, worker);
-            AnalysisState.update(this, "مراقبة الشاشة");
+            AnalysisState.update(this, "مراقبة الشاشة — جمع أول 20 جولة");
         } catch (Exception e) {
             AnalysisState.update(this, "تعذر التقاط الشاشة");
             stopSelf();
@@ -147,8 +147,14 @@ public class ScreenCaptureService extends Service {
     private void interpret(com.google.mlkit.vision.text.Text textResult) {
         String text = textResult.getText();
         String lower = text.toLowerCase(java.util.Locale.ROOT);
-        boolean countdown = lower.contains("place your bets") || lower.contains("ضع رهان")
-                || lower.contains("next round") || lower.contains("الرهانات");
+        boolean countdown = lower.contains("place your bets") || lower.contains("place your bet")
+                || lower.contains("bets are open") || lower.contains("bets are closed")
+                || lower.contains("starting in") || lower.contains("starts in")
+                || lower.contains("next round") || lower.contains("waiting for next round")
+                || lower.contains("ضع رهان") || lower.contains("ضع رهانات")
+                || lower.contains("الرهانات") || lower.contains("الجولة القادمة")
+                || lower.contains("تبدأ خلال") || lower.contains("بدء الجولة")
+                || hasCountdownNumber(textResult);
         boolean finished = lower.contains("flew away") || lower.contains("crashed")
                 || lower.contains("طار") || lower.contains("انفجر");
         String found = null;
@@ -222,6 +228,24 @@ public class ScreenCaptureService extends Service {
             currentRoundId = "";
             lastLiveReading = "";
         }
+    }
+
+    // Recognize an explicit countdown only when OCR exposes a countdown label and a
+    // short standalone digit in the same screen; avoids treating multiplier digits as a timer.
+    private boolean hasCountdownNumber(com.google.mlkit.vision.text.Text result) {
+        String all = result.getText().toLowerCase(java.util.Locale.ROOT);
+        boolean timerContext = all.contains("sec") || all.contains("second")
+                || all.contains("countdown") || all.contains("starts in")
+                || all.contains("starting in") || all.contains("ثانية")
+                || all.contains("ثوان") || all.contains("العد التنازلي");
+        if (!timerContext) return false;
+        for (com.google.mlkit.vision.text.Text.TextBlock block : result.getTextBlocks()) {
+            for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
+                String value = line.getText().trim();
+                if (value.matches("[1-5]")) return true;
+            }
+        }
+        return false;
     }
 
     private void requestForecast(String roundId) {
