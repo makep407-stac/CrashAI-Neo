@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 public class ScreenCaptureService extends Service {
     public static final String ACTION_STOP = "sf.grh.crash.STOP_CAPTURE";
     private static final String CHANNEL = "crashai_capture";
-    private static final Pattern MULTIPLIER = Pattern.compile("(\\d{1,6}[.,]\\d{1,3})\\s*[x×]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MULTIPLIER = Pattern.compile("(\\d{1,6}[.,]\\d{1,3})\\s*[x×]?", Pattern.CASE_INSENSITIVE);
     private final Handler main = new Handler(Looper.getMainLooper());
     private HandlerThread workerThread;
     private Handler worker;
@@ -46,6 +46,7 @@ public class ScreenCaptureService extends Service {
     private String lastRecorded = "";
     private long lastRecordedAt;
     private String phase = "unknown";
+    private String lastLiveReading = "";
     private long lastFrameAt;
 
     @Override public void onCreate() {
@@ -143,12 +144,12 @@ public class ScreenCaptureService extends Service {
     }
 
     private void interpret(com.google.mlkit.vision.text.Text textResult) {
-        // OCR runs privately in the service. Prefer the largest multiplier text line,
-        // usually the live round value rather than small history labels.
         String text = textResult.getText();
         String lower = text.toLowerCase(java.util.Locale.ROOT);
-        boolean countdown = lower.contains("place your bets") || lower.contains("ضع رهان") || lower.contains("next round");
-        boolean finished = lower.contains("flew away") || lower.contains("crashed") || lower.contains("طار") || lower.contains("انفجر");
+        boolean countdown = lower.contains("place your bets") || lower.contains("ضع رهان")
+                || lower.contains("next round") || lower.contains("الرهانات");
+        boolean finished = lower.contains("flew away") || lower.contains("crashed")
+                || lower.contains("طار") || lower.contains("انفجر");
         String found = null;
         long largestArea = -1;
         for (com.google.mlkit.vision.text.Text.TextBlock block : textResult.getTextBlocks()) {
@@ -164,23 +165,50 @@ public class ScreenCaptureService extends Service {
                 }
             }
         }
-        if (countdown) phase = "countdown";
-        else if (finished) phase = "finished";
-        else if (found != null) phase = "flying";
-        if (found == null) {
+
+        String priorPhase = phase;
+        if (countdown) {
+            phase = "countdown";
+            if ("flying".equals(priorPhase) && !lastLiveReading.isEmpty()
+                    && !lastLiveReading.equals(lastRecorded)) {
+                lastRecorded = lastLiveReading;
+                lastRecordedAt = SystemClock.elapsedRealtime();
+                final String completed = lastLiveReading;
+                worker.post(() -> sendConfirmed(completed));
+            }
+            lastLiveReading = "";
             previousReading = "";
             sameReadings = 0;
             return;
         }
+
+        if (found == null) {
+            if (finished && "flying".equals(priorPhase) && !lastLiveReading.isEmpty()
+                    && !lastLiveReading.equals(lastRecorded)) {
+                lastRecorded = lastLiveReading;
+                lastRecordedAt = SystemClock.elapsedRealtime();
+                final String completed = lastLiveReading;
+                worker.post(() -> sendConfirmed(completed));
+                phase = "finished";
+                lastLiveReading = "";
+            }
+            previousReading = "";
+            sameReadings = 0;
+            return;
+        }
+
+        phase = finished ? "finished" : "flying";
         if (found.equals(previousReading)) sameReadings++;
         else { previousReading = found; sameReadings = 1; }
-        // Three consecutive matching OCR frames help reject single-frame digit errors.
-        if (finished && sameReadings >= 3 && (!found.equals(lastRecorded) ||
-                SystemClock.elapsedRealtime() - lastRecordedAt > 12000)) {
+        if (sameReadings >= 2) lastLiveReading = found;
+
+        // If the end marker appears with the final multiplier, wait for two matching frames.
+        if (finished && sameReadings >= 2 && !found.equals(lastRecorded)) {
             lastRecorded = found;
             lastRecordedAt = SystemClock.elapsedRealtime();
-            final String finalValue = found;
-            worker.post(() -> sendConfirmed(finalValue));
+            final String completed = found;
+            worker.post(() -> sendConfirmed(completed));
+            lastLiveReading = "";
         }
     }
 
