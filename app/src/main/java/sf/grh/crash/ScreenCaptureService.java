@@ -50,6 +50,8 @@ public class ScreenCaptureService extends Service {
     private long lastFrameAt;
     private long lastDiagnosticAt;
     private String currentRoundId = "";
+    private long lastLiveAt;
+    private long lastRoundSentAt;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -205,7 +207,7 @@ public class ScreenCaptureService extends Service {
         }
 
         if (found == null) {
-            if (finished && "flying".equals(priorPhase) && !lastLiveReading.isEmpty()
+            if ((finished || countdown) && "flying".equals(priorPhase) && !lastLiveReading.isEmpty()
                     && !lastLiveReading.equals(lastRecorded)) {
                 lastRecorded = lastLiveReading;
                 lastRecordedAt = SystemClock.elapsedRealtime();
@@ -221,10 +223,14 @@ public class ScreenCaptureService extends Service {
             return;
         }
 
+        // Keep the final visible multiplier while the crash banner appears.
         phase = finished ? "finished" : "flying";
         if (found.equals(previousReading)) sameReadings++;
         else { previousReading = found; sameReadings = 1; }
-        if (sameReadings >= 2) lastLiveReading = found;
+        if (sameReadings >= 2) {
+            lastLiveReading = found;
+            lastLiveAt = SystemClock.elapsedRealtime();
+        }
 
         // If the end marker appears with the final multiplier, wait for two matching frames.
         if (finished && sameReadings >= 2 && !found.equals(lastRecorded)) {
@@ -310,6 +316,7 @@ public class ScreenCaptureService extends Service {
                 out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
             }
             if (connection.getResponseCode() / 100 == 2) {
+                AnalysisState.recorded(this, multiplier);
                 AnalysisState.update(this, "تم تسجيل " + multiplier + "x");
                 HttpURLConnection stats = null;
                 try {
