@@ -27,13 +27,13 @@ public final class RoundJournal extends SQLiteOpenHelper {
         }
     }
     public synchronized String recentReport(int limit) {
-        StringBuilder out = new StringBuilder("round_id,multiplier,created_at,synced\\n");
+        StringBuilder out = new StringBuilder("round_id,multiplier,created_at,synced\n");
         try (Cursor c = getReadableDatabase().rawQuery(
                 "SELECT round_id,multiplier,created_at,synced FROM rounds ORDER BY created_at DESC LIMIT ?",
                 new String[]{String.valueOf(Math.max(1, Math.min(limit, 1000)))})) {
             while (c.moveToNext()) {
                 out.append(c.getString(0)).append(',').append(c.getDouble(1)).append(',')
-                   .append(c.getLong(2)).append(',').append(c.getInt(3)).append('\\n');
+                   .append(c.getLong(2)).append(',').append(c.getInt(3)).append('\n');
             }
         }
         return out.toString();
