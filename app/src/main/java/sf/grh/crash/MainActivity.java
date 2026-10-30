@@ -299,11 +299,11 @@ public class MainActivity extends Activity {
 
         // زر تشغيل النافذة العائمة أعلى اليسار.
         TextView overlayButton = makeLabel(
-                "◉", 22, BLUE, true
+                "نافذة", 13, BLUE, true
         );
 
         FrameLayout.LayoutParams buttonParams =
-                new FrameLayout.LayoutParams(dp(48), dp(48));
+                new FrameLayout.LayoutParams(dp(66), dp(48));
 
         buttonParams.gravity = Gravity.TOP | Gravity.START;
         buttonParams.leftMargin = dp(10);
@@ -414,6 +414,14 @@ public class MainActivity extends Activity {
         captureParams.bottomMargin = dp(85);
         root.addView(captureButton, captureParams);
         captureButton.setOnClickListener(v -> requestScreenCapture());
+
+        TextView combinedButton = makeLabel("تشغيل النافذة + القراءة", 14, Color.WHITE, true);
+        combinedButton.setBackground(makeShape(Color.rgb(20, 90, 125), BLUE, 1));
+        FrameLayout.LayoutParams combinedParams = new FrameLayout.LayoutParams(dp(220), dp(46));
+        combinedParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        combinedParams.bottomMargin = dp(145);
+        root.addView(combinedButton, combinedParams);
+        combinedButton.setOnClickListener(v -> { requestOverlayPermission(); requestScreenCapture(); });
 
         TextView stopButton = makeLabel("إيقاف تسجيل الشاشة", 15, Color.WHITE, true);
         stopButton.setBackground(makeShape(Color.rgb(150, 35, 45), Color.rgb(230, 70, 80), 1));
