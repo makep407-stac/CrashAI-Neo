@@ -41,6 +41,8 @@ public class ScreenCaptureService extends Service {
     private ImageReader reader;
     private TextRecognizer recognizer;
     private StatusSocket statusSocket;
+    private long previousFrameFingerprint = Long.MIN_VALUE;
+    private int unchangedFrames;
     private final java.util.ArrayDeque<String> frameVotes = new java.util.ArrayDeque<>();
     private boolean processing;
     private String previousReading = "";
@@ -149,6 +151,15 @@ public class ScreenCaptureService extends Service {
             padded.copyPixelsFromBuffer(buffer);
             Bitmap frame = Bitmap.createBitmap(padded, 0, 0, width, height);
             padded.recycle();
+            // Independent pixel-sampling method detects frozen/unchanged frames.
+            long fingerprint = 1469598103934665603L;
+            for (int y = height / 4; y < height * 3 / 4; y += Math.max(1, height / 12)) {
+                for (int x = width / 4; x < width * 3 / 4; x += Math.max(1, width / 12)) {
+                    fingerprint = (fingerprint ^ frame.getPixel(x, y)) * 1099511628211L;
+                }
+            }
+            unchangedFrames = fingerprint == previousFrameFingerprint ? unchangedFrames + 1 : 0;
+            previousFrameFingerprint = fingerprint;
             processing = true;
             recognizer.process(InputImage.fromBitmap(frame, 0))
                     .addOnSuccessListener(result -> interpret(result))
