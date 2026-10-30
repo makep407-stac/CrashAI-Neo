@@ -24,10 +24,14 @@ public final class AnalysisState {
  public static String current(Context c) {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
   String value=p.getString("display","");
-  return value.isEmpty() ? p.getInt("sample_count",0)+"/20" : value+"x";
+  int local = 0;
+  try (RoundJournal journal = new RoundJournal(c)) { local = journal.count(); } catch (Exception ignored) {}
+  return value.isEmpty() ? local+"/20" : value+"x";
  }
  public static String status(Context c) {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
-  return p.getString("status","جمع البيانات: يلزم حفظ 20 جولة أولاً")+" • تقدير تاريخي للمضاعف، ليس تنبؤًا مثبتًا • عدد الجولات: "+p.getInt("sample_count",0);
+  int local = 0;
+  try (RoundJournal journal = new RoundJournal(c)) { local = journal.count(); } catch (Exception ignored) {}
+  return p.getString("status","جمع البيانات: يلزم حفظ 20 جولة أولاً")+" • جولات الهاتف: "+local+" • جولات الخادم: "+p.getInt("sample_count",0)+" • تقدير تاريخي وليس تنبؤًا مثبتًا";
  }
 }
