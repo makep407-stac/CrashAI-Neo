@@ -50,6 +50,12 @@ public class ScreenCaptureService extends Service {
     private long lastFrameAt;
     private long lastDiagnosticAt;
     private String currentRoundId = "";
+    private final Runnable estimatePoll = new Runnable() {
+        @Override public void run() {
+            new Thread(() -> fetchEstimateForDisplay(), "crashai-estimate-poll").start();
+            main.postDelayed(this, 15000);
+        }
+    };
     private long lastLiveAt;
     private long lastRoundSentAt;
 
@@ -110,7 +116,9 @@ public class ScreenCaptureService extends Service {
             display = projection.createVirtualDisplay("CrashAI screen", width, height,
                     metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                     reader.getSurface(), null, worker);
-            AnalysisState.update(this, "مراقبة الشاشة — جمع أول 20 جولة");
+            AnalysisState.update(this, "مراقبة الشاشة — فحص التقديرات على الخادم");
+            main.removeCallbacks(estimatePoll);
+            main.post(estimatePoll);
         } catch (Exception e) {
             AnalysisState.update(this, "تعذر التقاط الشاشة");
             stopSelf();
@@ -262,6 +270,38 @@ public class ScreenCaptureService extends Service {
         return false;
     }
 
+    private void fetchEstimateForDisplay() {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL("https://crashai-neo-api.onrender.com/next-estimate?limit=200").openConnection();
+            connection.setConnectTimeout(12000);
+            connection.setReadTimeout(12000);
+            int code = connection.getResponseCode();
+            if (code != 200) {
+                AnalysisState.update(this, "خادم التقديرات: HTTP " + code);
+                return;
+            }
+            StringBuilder response = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) response.append(line);
+            }
+            JSONObject json = new JSONObject(response.toString());
+            int count = json.optInt("sample_count", 0);
+            AnalysisState.progress(this, count);
+            if (json.optBoolean("available", false)) {
+                AnalysisState.updateMultiplier(this, json.getDouble("estimate_multiplier"), count);
+                AnalysisState.update(this, "تم جلب التقدير الإحصائي من الخادم");
+            } else {
+                AnalysisState.update(this, "الخادم يملك " + count + " من 20 جولة");
+            }
+        } catch (Exception e) {
+            AnalysisState.update(this, "فشل جلب التقدير: " + e.getClass().getSimpleName());
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
     private void requestForecast(String roundId) {
         HttpURLConnection connection = null;
         try {
@@ -352,6 +392,7 @@ public class ScreenCaptureService extends Service {
     }
 
     @Override public void onDestroy() {
+        main.removeCallbacks(estimatePoll);
         if (reader != null) reader.close();
         if (display != null) display.release();
         if (projection != null) projection.stop();
