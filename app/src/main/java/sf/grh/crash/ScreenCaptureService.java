@@ -188,8 +188,7 @@ public class ScreenCaptureService extends Service {
                 || lower.contains("bets are open") || lower.contains("bets are closed")
                 || lower.contains("starting in") || lower.contains("starts in")
                 || lower.contains("next round") || lower.contains("waiting for next round")
-                || lower.contains("ضع رهان") || lower.contains("ضع رهانات")
-                || lower.contains("الرهانات") || lower.contains("الجولة القادمة")
+                || lower.contains("الجولة القادمة")
                 || lower.contains("تبدأ خلال") || lower.contains("بدء الجولة")
                 || hasCountdownNumber(textResult)
                 || hasChartCountdown(textResult);
@@ -203,9 +202,9 @@ public class ScreenCaptureService extends Service {
                 android.graphics.Rect region = line.getBoundingBox();
                 // Only the large multiplier at the lower-right of the game chart.
                 if (region == null || captureWidth <= 0 || captureHeight <= 0 ||
-                    region.centerX() < captureWidth * 0.20 ||
-                    region.centerY() < captureHeight * 0.13 ||
-                    region.centerY() > captureHeight * 0.65) continue;
+                    region.centerX() < captureWidth * 0.65 ||
+                    region.centerY() < captureHeight * 0.19 ||
+                    region.centerY() > captureHeight * 0.34) continue;
                 if (!raw.matches("(?i).*\\d[.,]\\d{1,3}\\s*[x×].*")) continue;
                 Matcher match = MULTIPLIER.matcher(raw);
                 while (match.find()) {
