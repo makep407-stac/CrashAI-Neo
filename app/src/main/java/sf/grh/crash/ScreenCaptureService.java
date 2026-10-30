@@ -40,6 +40,8 @@ public class ScreenCaptureService extends Service {
     private VirtualDisplay display;
     private ImageReader reader;
     private TextRecognizer recognizer;
+    private StatusSocket statusSocket;
+    private final java.util.ArrayDeque<String> frameVotes = new java.util.ArrayDeque<>();
     private boolean processing;
     private String previousReading = "";
     private int sameReadings;
@@ -120,7 +122,10 @@ public class ScreenCaptureService extends Service {
                     reader.getSurface(), null, worker);
             AnalysisState.update(this, "مراقبة الشاشة — فحص التقديرات على الخادم");
             main.removeCallbacks(estimatePoll);
+        if (statusSocket != null) statusSocket.stop();
             main.post(estimatePoll);
+            statusSocket = new StatusSocket(this);
+            statusSocket.connect();
         } catch (Exception e) {
             AnalysisState.update(this, "تعذر التقاط الشاشة");
             stopSelf();
@@ -189,6 +194,17 @@ public class ScreenCaptureService extends Service {
             }
         }
 
+        // Second method: temporal consensus over five video frames.
+        frameVotes.addLast(found == null ? "" : found);
+        while (frameVotes.size() > 5) frameVotes.removeFirst();
+        java.util.Map<String, Integer> votes = new java.util.HashMap<>();
+        for (String v : frameVotes) if (!v.isEmpty()) votes.put(v, votes.containsKey(v) ? votes.get(v) + 1 : 1);
+        String voted = null;
+        int highest = 0;
+        for (java.util.Map.Entry<String, Integer> entry : votes.entrySet()) {
+            if (entry.getValue() > highest) { voted = entry.getKey(); highest = entry.getValue(); }
+        }
+        if (highest >= 2 && found == null && finished) found = voted;
         // A persistent betting label must not suppress a visible live multiplier.
         // Count down only when the large multiplier is absent or the round is finished.
         if (SystemClock.elapsedRealtime() - lastDiagnosticAt > 6000) {
@@ -214,6 +230,7 @@ public class ScreenCaptureService extends Service {
                 new Thread(() -> requestForecast(upcomingId), "crashai-prepare").start();
             }
             lastLiveReading = "";
+            frameVotes.clear();
             previousStableValue = 0;
             previousReading = "";
             sameReadings = 0;
@@ -227,7 +244,7 @@ public class ScreenCaptureService extends Service {
                 lastRecordedAt = SystemClock.elapsedRealtime();
                 final String completed = lastLiveReading;
                 final String completedRoundId = currentRoundId;
-                worker.post(() -> sendConfirmed(completed, completedRoundId));
+                new Thread(() -> sendConfirmed(completed, completedRoundId), "crashai-upload").start();
                 currentRoundId = "";
                 phase = "finished";
                 lastLiveReading = "";
@@ -263,7 +280,7 @@ public class ScreenCaptureService extends Service {
             lastRecordedAt = SystemClock.elapsedRealtime();
             final String completed = found;
             final String completedRoundId = currentRoundId;
-            worker.post(() -> sendConfirmed(completed, completedRoundId));
+            new Thread(() -> sendConfirmed(completed, completedRoundId), "crashai-upload").start();
             currentRoundId = "";
             lastLiveReading = "";
         }
