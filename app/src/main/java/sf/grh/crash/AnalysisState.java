@@ -19,7 +19,7 @@ public final class AnalysisState {
   return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getString("last_recorded","بانتظار تسجيل الجولات");
  }
  public static void progress(Context c,int count) {
-  c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putInt("sample_count",Math.max(0,count)).apply();
+  c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putInt("sample_count",Math.max(c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getInt("sample_count",0),Math.max(0,count))).apply();
  }
  public static String current(Context c) {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
