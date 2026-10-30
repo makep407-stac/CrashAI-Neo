@@ -176,6 +176,7 @@ public class ScreenCaptureService extends Service {
                     .addOnCompleteListener(task -> { processing = false; frame.recycle(); });
         } catch (Exception e) {
             processing = false;
+            AnalysisState.update(this, "خطأ إطار: " + e.getClass().getSimpleName());
         } finally {
             if (image != null) image.close();
         }
@@ -202,9 +203,9 @@ public class ScreenCaptureService extends Service {
                 android.graphics.Rect region = line.getBoundingBox();
                 // Only the large multiplier at the lower-right of the game chart.
                 if (region == null || captureWidth <= 0 || captureHeight <= 0 ||
-                    region.centerX() < captureWidth * 0.58 ||
+                    region.centerX() < captureWidth * 0.20 ||
                     region.centerY() < captureHeight * 0.13 ||
-                    region.centerY() > captureHeight * 0.40) continue;
+                    region.centerY() > captureHeight * 0.65) continue;
                 if (!raw.matches("(?i).*\\d[.,]\\d{1,3}\\s*[x×].*")) continue;
                 Matcher match = MULTIPLIER.matcher(raw);
                 while (match.find()) {
@@ -241,7 +242,13 @@ public class ScreenCaptureService extends Service {
             frameVotes.clear();
             return;
         }
-        if (found == null) return;
+        if (found == null) {
+            if (finished) {
+                phase = "finished";
+                AnalysisState.update(this, "نهاية الجولة ظاهرة لكن الرقم النهائي غير مقروء — لم تُحفظ");
+            }
+            return;
+        }
         double candidate;
         try { candidate = Double.parseDouble(found); } catch (NumberFormatException ex) { return; }
         if (candidate < 1 || candidate > 100000) return;
@@ -260,6 +267,10 @@ public class ScreenCaptureService extends Service {
             lastLiveAt = now;
         }
         phase = finished ? "finished" : "flying";
+        if (now - lastDiagnosticAt > 2500) {
+            lastDiagnosticAt = now;
+            AnalysisState.update(this, (finished ? "نتيجة نهائية مرئية: " : "جولة جارية: ") + found + "x");
+        }
         if (finished && !lastLiveReading.isEmpty()) {
             final String completed = lastLiveReading;
             final String id = currentRoundId;
