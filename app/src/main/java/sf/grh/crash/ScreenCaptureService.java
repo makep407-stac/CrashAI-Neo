@@ -287,6 +287,7 @@ public class ScreenCaptureService extends Service {
                     AnalysisState.updateMultiplier(this, parsed.getDouble("estimate_multiplier"), parsed.optInt("sample_count", 0));
                     AnalysisState.update(this, "تقدير إحصائي جاهز للجولة");
                 } else if (!parsed.optBoolean("available", false)) {
+                    AnalysisState.progress(this, parsed.optInt("sample_count", 0));
                     AnalysisState.update(this, "الخادم سجل " + parsed.optInt("sample_count", 0) + " من 20 جولة مطلوبة");
                 }
             } else {
@@ -334,6 +335,7 @@ public class ScreenCaptureService extends Service {
                             while ((line = in.readLine()) != null) json.append(line);
                         }
                         JSONObject parsed = new JSONObject(json.toString());
+                        AnalysisState.progress(this, parsed.optInt("sample_count", 0));
                         if (parsed.optBoolean("available", false)) {
                             AnalysisState.updateMultiplier(this,
                                     parsed.getDouble("estimate_multiplier"),
