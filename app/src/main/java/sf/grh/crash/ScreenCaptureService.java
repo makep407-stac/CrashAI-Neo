@@ -64,6 +64,7 @@ public class ScreenCaptureService extends Service {
     private double previousStableValue = 0;
     private int stableFrames = 0;
     private long lastRoundSentAt;
+    private int captureWidth, captureHeight;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -117,6 +118,7 @@ public class ScreenCaptureService extends Service {
             DisplayMetrics metrics = new DisplayMetrics();
             ((WindowManager)getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(metrics);
             int width = metrics.widthPixels, height = metrics.heightPixels;
+            captureWidth = width; captureHeight = height;
             reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
             reader.setOnImageAvailableListener(r -> capture(r), worker);
             display = projection.createVirtualDisplay("CrashAI screen", width, height,
@@ -181,7 +183,8 @@ public class ScreenCaptureService extends Service {
                 || lower.contains("ضع رهان") || lower.contains("ضع رهانات")
                 || lower.contains("الرهانات") || lower.contains("الجولة القادمة")
                 || lower.contains("تبدأ خلال") || lower.contains("بدء الجولة")
-                || hasCountdownNumber(textResult);
+                || hasCountdownNumber(textResult)
+                || hasChartCountdown(textResult);
         boolean finished = lower.contains("flew away") || lower.contains("crashed")
                 || lower.contains("طار") || lower.contains("انفجر");
         String found = null;
@@ -189,6 +192,12 @@ public class ScreenCaptureService extends Service {
         for (com.google.mlkit.vision.text.Text.TextBlock block : textResult.getTextBlocks()) {
             for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
                 String raw = line.getText();
+                android.graphics.Rect region = line.getBoundingBox();
+                // Only the large multiplier at the lower-right of the game chart.
+                if (region == null || captureWidth <= 0 || captureHeight <= 0 ||
+                    region.centerX() < captureWidth * 0.58 ||
+                    region.centerY() < captureHeight * 0.13 ||
+                    region.centerY() > captureHeight * 0.40) continue;
                 if (!raw.matches("(?i).*\\d[.,]\\d{1,3}\\s*[x×].*")) continue;
                 Matcher match = MULTIPLIER.matcher(raw);
                 while (match.find()) {
@@ -249,10 +258,24 @@ public class ScreenCaptureService extends Service {
             final String id = currentRoundId;
             lastRecorded = completed;
             lastRecordedAt = now;
-            new Thread(() -> sendConfirmed(completed, id), "crashai-upload").start();
+            saveAndUpload(completed, id);
             currentRoundId = "";
             lastLiveReading = "";
         }
+    }
+
+    // A standalone 1..7 in the chart is the visible pre-flight countdown.
+    private boolean hasChartCountdown(com.google.mlkit.vision.text.Text result) {
+        if (captureWidth <= 0 || captureHeight <= 0) return false;
+        for (com.google.mlkit.vision.text.Text.TextBlock block : result.getTextBlocks()) {
+            for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
+                android.graphics.Rect r = line.getBoundingBox();
+                if (r == null || !line.getText().trim().matches("[1-7]")) continue;
+                if (r.centerX() > captureWidth * 0.25 && r.centerX() < captureWidth * 0.78 &&
+                    r.centerY() > captureHeight * 0.13 && r.centerY() < captureHeight * 0.40) return true;
+            }
+        }
+        return false;
     }
 
     // Recognize an explicit countdown only when OCR exposes a countdown label and a
