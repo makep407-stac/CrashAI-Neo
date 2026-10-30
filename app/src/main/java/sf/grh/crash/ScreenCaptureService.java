@@ -48,6 +48,7 @@ public class ScreenCaptureService extends Service {
     private String phase = "unknown";
     private String lastLiveReading = "";
     private long lastFrameAt;
+    private long lastDiagnosticAt;
     private String currentRoundId = "";
 
     @Override public void onCreate() {
@@ -173,8 +174,15 @@ public class ScreenCaptureService extends Service {
             }
         }
 
+        // A persistent betting label must not suppress a visible live multiplier.
+        // Count down only when the large multiplier is absent or the round is finished.
+        if (SystemClock.elapsedRealtime() - lastDiagnosticAt > 6000) {
+            lastDiagnosticAt = SystemClock.elapsedRealtime();
+            AnalysisState.update(this, found != null ? "قراءة المضاعف: " + found + "x" :
+                    (countdown ? "تم اكتشاف شاشة انتظار الجولة" : "التقاط الشاشة يعمل — لم يُكتشف مضاعف بعد"));
+        }
         String priorPhase = phase;
-        if (countdown) {
+        if (countdown && (found == null || finished)) {
             phase = "countdown";
             if ("flying".equals(priorPhase) && !lastLiveReading.isEmpty()
                     && !lastLiveReading.equals(lastRecorded)) {
