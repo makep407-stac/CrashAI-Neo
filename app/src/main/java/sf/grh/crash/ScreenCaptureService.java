@@ -225,13 +225,8 @@ public class ScreenCaptureService extends Service {
         }
         // The next betting phase closes the previous round exactly once.
         if (countdown && (found == null || finished)) {
-            if ("flying".equals(phase) && !lastLiveReading.isEmpty()) {
-                final String completed = lastLiveReading;
-                final String id = currentRoundId;
-                lastRecorded = completed;
-                lastRecordedAt = now;
-                saveAndUpload(completed, id);
-            }
+            // A countdown alone does not verify the last in-flight multiplier.
+            if ("flying".equals(phase)) AnalysisState.update(this, "انتهت الجولة دون تأكيد النتيجة — لم نحفظ مضاعف الطيران");
             phase = "countdown";
             currentRoundId = "";
             lastLiveReading = "";
