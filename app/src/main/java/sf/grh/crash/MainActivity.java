@@ -413,6 +413,30 @@ public class MainActivity extends Activity {
         captureParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         captureParams.bottomMargin = dp(85);
         root.addView(captureButton, captureParams);
+        TextView journalButton = makeLabel("سجل الجولات المحلية", 14, Color.WHITE, true);
+        journalButton.setBackground(makeShape(Color.rgb(20, 75, 95), BLUE, 1));
+        FrameLayout.LayoutParams journalParams = new FrameLayout.LayoutParams(dp(220), dp(46));
+        journalParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        journalParams.topMargin = dp(16);
+        root.addView(journalButton, journalParams);
+        journalButton.setOnClickListener(v -> {
+            try (RoundJournal journal = new RoundJournal(this)) {
+                final String report = journal.recentReport(100);
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle("الجولات المحلية: " + journal.count())
+                    .setMessage(report.length() > 3000 ? report.substring(0, 3000) + "..." : report)
+                    .setPositiveButton("مشاركة CSV", (d, w) -> {
+                        Intent share = new Intent(Intent.ACTION_SEND);
+                        share.setType("text/plain");
+                        share.putExtra(Intent.EXTRA_TEXT, report);
+                        startActivity(Intent.createChooser(share, "مشاركة الجولات"));
+                    })
+                    .setNegativeButton("إغلاق", null).show();
+            } catch (Exception ex) {
+                Toast.makeText(this, "تعذر قراءة السجل: " + ex.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+            }
+        });
+
         captureButton.setOnClickListener(v -> requestScreenCapture());
 
         TextView combinedButton = makeLabel("تشغيل النافذة + القراءة", 14, Color.WHITE, true);
