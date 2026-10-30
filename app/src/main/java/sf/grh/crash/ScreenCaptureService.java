@@ -226,7 +226,7 @@ public class ScreenCaptureService extends Service {
         if (countdown && (found == null || finished)) {
             phase = "countdown";
             if ("flying".equals(priorPhase) && !lastLiveReading.isEmpty()
-                    && !lastLiveReading.equals(lastRecorded)) {
+                    && SystemClock.elapsedRealtime() - lastRecordedAt > 1800) {
                 lastRecorded = lastLiveReading;
                 lastRecordedAt = SystemClock.elapsedRealtime();
                 final String completed = lastLiveReading;
@@ -265,6 +265,7 @@ public class ScreenCaptureService extends Service {
         }
 
         // Keep the final visible multiplier while the crash banner appears.
+        if (currentRoundId.isEmpty() && !finished) currentRoundId = "screen-" + System.currentTimeMillis();
         phase = finished ? "finished" : "flying";
         // Temporal video-frame validation: reject implausible decimal shifts
         // and prefer readings confirmed by consecutive frames.
@@ -285,7 +286,7 @@ public class ScreenCaptureService extends Service {
         // reading when the final text itself cannot be confirmed twice.
         if (finished && (sameReadings >= 2 || !lastLiveReading.isEmpty())) {
             found = sameReadings >= 2 ? found : lastLiveReading;
-            if (found.equals(lastRecorded)) return;
+            if (SystemClock.elapsedRealtime() - lastRecordedAt < 1800) return;
             lastRecorded = found;
             lastRecordedAt = SystemClock.elapsedRealtime();
             final String completed = found;
