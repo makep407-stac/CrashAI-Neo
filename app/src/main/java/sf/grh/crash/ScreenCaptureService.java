@@ -206,12 +206,12 @@ public class ScreenCaptureService extends Service {
                 final String completed = lastLiveReading;
                 final String completedRoundId = currentRoundId;
                 currentRoundId = "";
-                worker.post(() -> sendConfirmed(completed, completedRoundId));
+                new Thread(() -> sendConfirmed(completed, completedRoundId), "crashai-upload").start();
             }
             if (currentRoundId.isEmpty()) {
                 currentRoundId = "screen-" + System.currentTimeMillis();
                 final String upcomingId = currentRoundId;
-                worker.post(() -> requestForecast(upcomingId));
+                new Thread(() -> requestForecast(upcomingId), "crashai-prepare").start();
             }
             lastLiveReading = "";
             previousStableValue = 0;
@@ -371,8 +371,18 @@ public class ScreenCaptureService extends Service {
                 out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
             }
             if (connection.getResponseCode() / 100 == 2) {
-                AnalysisState.recorded(this, multiplier);
-                AnalysisState.update(this, "تم تسجيل " + multiplier + "x");
+                StringBuilder savedResponse = new StringBuilder();
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = in.readLine()) != null) savedResponse.append(line);
+                }
+                JSONObject savedResult = new JSONObject(savedResponse.toString());
+                if (savedResult.optBoolean("saved_to_sqlite", false) || "duplicate_ignored".equals(savedResult.optString("status"))) {
+                    AnalysisState.recorded(this, multiplier);
+                    AnalysisState.update(this, "تم تسجيل " + multiplier + "x");
+                } else {
+                    AnalysisState.update(this, "استجاب الخادم لكن لم يؤكد الحفظ");
+                }
                 HttpURLConnection stats = null;
                 try {
                     stats = (HttpURLConnection) new URL(
