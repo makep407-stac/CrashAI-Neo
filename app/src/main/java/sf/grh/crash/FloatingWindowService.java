@@ -29,12 +29,14 @@ public class FloatingWindowService extends Service {
     private WindowManager windowManager;
     private TextView floatingCircle;
     private TextView recordedLabel;
+    private TextView diagnosticLabel;
     private LinearLayout overlayRoot;
     private final Handler displayHandler = new Handler(Looper.getMainLooper());
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             if (floatingCircle != null) floatingCircle.setText(AnalysisState.current(FloatingWindowService.this));
             if (recordedLabel != null) recordedLabel.setText(AnalysisState.lastRecorded(FloatingWindowService.this));
+            if (diagnosticLabel != null) diagnosticLabel.setText(AnalysisState.status(FloatingWindowService.this));
             displayHandler.postDelayed(this, 700);
         }
     };
@@ -73,6 +75,12 @@ public class FloatingWindowService extends Service {
         recordedLabel.setShadowLayer(dp(9),0,0,Color.CYAN);
         recordedLabel.setSingleLine(true);
         overlayRoot.addView(recordedLabel,new LinearLayout.LayoutParams(dp(205),dp(34)));
+        diagnosticLabel = new TextView(this);
+        diagnosticLabel.setTextColor(Color.LTGRAY);
+        diagnosticLabel.setTextSize(10);
+        diagnosticLabel.setGravity(Gravity.CENTER);
+        diagnosticLabel.setMaxLines(2);
+        overlayRoot.addView(diagnosticLabel, new LinearLayout.LayoutParams(dp(210), dp(42)));
         floatingCircle = new TextView(this);
         floatingCircle.setText(AnalysisState.current(this));
         floatingCircle.setTextColor(Color.WHITE);
@@ -92,7 +100,7 @@ public class FloatingWindowService extends Service {
 
         params = new WindowManager.LayoutParams(
                 dp(210),
-                dp(34) + dp(circleSize),
+                dp(76) + dp(circleSize),
                 overlayType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -120,7 +128,7 @@ public class FloatingWindowService extends Service {
                         floatingCircle.getLayoutParams().width = dp(circleSize);
                         floatingCircle.getLayoutParams().height = dp(circleSize);
                         overlayRoot.requestLayout();
-                        params.height = dp(34 + circleSize);
+                        params.height = dp(76 + circleSize);
 
                         updateCirclePosition();
                         return true;
