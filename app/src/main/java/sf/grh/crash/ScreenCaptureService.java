@@ -256,8 +256,8 @@ public class ScreenCaptureService extends Service {
             connection = (HttpURLConnection) new URL("https://crashai-neo-api.onrender.com/prepare-round").openConnection();
             connection.setRequestMethod("POST");
             connection.setDoOutput(true);
-            connection.setConnectTimeout(2500);
-            connection.setReadTimeout(2500);
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(10000);
             connection.setRequestProperty("Content-Type", "application/json");
             try (OutputStream out = connection.getOutputStream()) {
                 out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -271,10 +271,15 @@ public class ScreenCaptureService extends Service {
                 JSONObject parsed = new JSONObject(json.toString());
                 if (parsed.optBoolean("available", false) && roundId.equals(currentRoundId)) {
                     AnalysisState.updateMultiplier(this, parsed.getDouble("estimate_multiplier"), parsed.optInt("sample_count", 0));
+                    AnalysisState.update(this, "تقدير إحصائي جاهز للجولة");
+                } else if (!parsed.optBoolean("available", false)) {
+                    AnalysisState.update(this, "الخادم سجل " + parsed.optInt("sample_count", 0) + " من 20 جولة مطلوبة");
                 }
+            } else {
+                AnalysisState.update(this, "طلب التقدير فشل: HTTP " + connection.getResponseCode());
             }
-        } catch (Exception ignored) {
-            // Keep OCR running when the estimate endpoint is unavailable.
+        } catch (Exception e) {
+            AnalysisState.update(this, "تعذر جلب التقدير — تحقق من اتصال الخادم");
         } finally {
             if (connection != null) connection.disconnect();
         }
@@ -290,8 +295,8 @@ public class ScreenCaptureService extends Service {
             connection = (HttpURLConnection)url.openConnection();
             connection.setRequestMethod("POST");
             connection.setDoOutput(true);
-            connection.setConnectTimeout(1400);
-            connection.setReadTimeout(1400);
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(10000);
             connection.setRequestProperty("Content-Type", "application/json");
             try (OutputStream out = connection.getOutputStream()) {
                 out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -303,8 +308,8 @@ public class ScreenCaptureService extends Service {
                     stats = (HttpURLConnection) new URL(
                             "https://crashai-neo-api.onrender.com/next-estimate?limit=200"
                     ).openConnection();
-                    stats.setConnectTimeout(1400);
-                    stats.setReadTimeout(1400);
+                    stats.setConnectTimeout(10000);
+                    stats.setReadTimeout(10000);
                     if (stats.getResponseCode() == 200) {
                         StringBuilder json = new StringBuilder();
                         try (BufferedReader in = new BufferedReader(
