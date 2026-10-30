@@ -410,8 +410,8 @@ public class ScreenCaptureService extends Service {
             connection = (HttpURLConnection)url.openConnection();
             connection.setRequestMethod("POST");
             connection.setDoOutput(true);
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(10000);
+            connection.setConnectTimeout(75000);
+            connection.setReadTimeout(75000);
             connection.setRequestProperty("Content-Type", "application/json");
             try (OutputStream out = connection.getOutputStream()) {
                 out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -433,32 +433,6 @@ public class ScreenCaptureService extends Service {
                     return false;
                 }
                 return true;
-                /*HttpURLConnection stats = null;
-                try {
-                    stats = (HttpURLConnection) new URL(
-                            "https://crashai-neo-api.onrender.com/next-estimate?limit=200"
-                    ).openConnection();
-                    stats.setConnectTimeout(10000);
-                    stats.setReadTimeout(10000);
-                    if (stats.getResponseCode() == 200) {
-                        StringBuilder json = new StringBuilder();
-                        try (BufferedReader in = new BufferedReader(
-                                new InputStreamReader(stats.getInputStream(),
-                                        java.nio.charset.StandardCharsets.UTF_8))) {
-                            String line;
-                            while ((line = in.readLine()) != null) json.append(line);
-                        }
-                        JSONObject parsed = new JSONObject(json.toString());
-                        AnalysisState.progress(this, parsed.optInt("sample_count", 0));
-                        if (parsed.optBoolean("available", false)) {
-                            AnalysisState.updateMultiplier(this,
-                                    parsed.getDouble("estimate_multiplier"),
-                                    parsed.getInt("sample_count"));
-                        }
-                    }
-                } finally {
-                    if (stats != null) stats.disconnect();
-                }*/
             } else {
                 AnalysisState.update(this, "فشل حفظ الجولة: HTTP " + uploadCode);
                 return false;
