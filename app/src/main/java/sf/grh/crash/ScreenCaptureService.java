@@ -224,9 +224,16 @@ public class ScreenCaptureService extends Service {
                     (countdown ? "تم اكتشاف شاشة انتظار الجولة" : "التقاط الشاشة يعمل — لم يُكتشف مضاعف بعد"));
         }
         // The next betting phase closes the previous round exactly once.
-        if (countdown && (found == null || finished)) {
-            // A countdown alone does not verify the last in-flight multiplier.
-            if ("flying".equals(phase)) AnalysisState.update(this, "انتهت الجولة دون تأكيد النتيجة — لم نحفظ مضاعف الطيران");
+        if (countdown && found == null) {
+            // The chart's countdown follows the plane disappearing. Save the last
+            // recently observed multiplier once; it is an observed approximation.
+            if ("flying".equals(phase) && !lastLiveReading.isEmpty()
+                    && !currentRoundId.isEmpty() && now - lastLiveAt <= 5000L) {
+                String completed = lastLiveReading;
+                String completedId = currentRoundId;
+                saveAndUpload(completed, completedId);
+                AnalysisState.update(this, "اختفت الطائرة — حفظ آخر قراءة: " + completed + "x");
+            }
             phase = "countdown";
             currentRoundId = "";
             lastLiveReading = "";
