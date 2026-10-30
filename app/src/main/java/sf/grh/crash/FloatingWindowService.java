@@ -13,6 +13,8 @@ import android.os.IBinder;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.TextView;
+import android.widget.LinearLayout;
+import android.graphics.Typeface;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -26,10 +28,13 @@ public class FloatingWindowService extends Service {
 
     private WindowManager windowManager;
     private TextView floatingCircle;
+    private TextView recordedLabel;
+    private LinearLayout overlayRoot;
     private final Handler displayHandler = new Handler(Looper.getMainLooper());
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             if (floatingCircle != null) floatingCircle.setText(AnalysisState.current(FloatingWindowService.this));
+            if (recordedLabel != null) recordedLabel.setText(AnalysisState.lastRecorded(FloatingWindowService.this));
             displayHandler.postDelayed(this, 700);
         }
     };
@@ -56,6 +61,18 @@ public class FloatingWindowService extends Service {
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
+        overlayRoot = new LinearLayout(this);
+        overlayRoot.setOrientation(LinearLayout.VERTICAL);
+        overlayRoot.setGravity(Gravity.CENTER);
+        recordedLabel = new TextView(this);
+        recordedLabel.setText(AnalysisState.lastRecorded(this));
+        recordedLabel.setTextColor(Color.rgb(110,235,255));
+        recordedLabel.setTextSize(13);
+        recordedLabel.setTypeface(Typeface.create("sans-serif-medium",Typeface.BOLD));
+        recordedLabel.setGravity(Gravity.CENTER);
+        recordedLabel.setShadowLayer(dp(9),0,0,Color.CYAN);
+        recordedLabel.setSingleLine(true);
+        overlayRoot.addView(recordedLabel,new LinearLayout.LayoutParams(dp(205),dp(34)));
         floatingCircle = new TextView(this);
         floatingCircle.setText(AnalysisState.current(this));
         floatingCircle.setTextColor(Color.WHITE);
@@ -63,6 +80,7 @@ public class FloatingWindowService extends Service {
         floatingCircle.setGravity(Gravity.CENTER);
         floatingCircle.setPadding(dp(5), dp(5), dp(5), dp(5));
         floatingCircle.setBackground(createCircle());
+        overlayRoot.addView(floatingCircle,new LinearLayout.LayoutParams(dp(90),dp(90)));
 
         int overlayType;
 
@@ -73,8 +91,8 @@ public class FloatingWindowService extends Service {
         }
 
         params = new WindowManager.LayoutParams(
-                circleSize,
-                circleSize,
+                dp(210),
+                dp(34) + dp(circleSize),
                 overlayType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -99,8 +117,10 @@ public class FloatingWindowService extends Service {
                                 )
                         );
 
-                        params.width = circleSize;
-                        params.height = circleSize;
+                        floatingCircle.getLayoutParams().width = dp(circleSize);
+                        floatingCircle.getLayoutParams().height = dp(circleSize);
+                        overlayRoot.requestLayout();
+                        params.height = dp(34 + circleSize);
 
                         updateCirclePosition();
                         return true;
@@ -108,7 +128,7 @@ public class FloatingWindowService extends Service {
                 }
         );
 
-        floatingCircle.setOnTouchListener((view, event) -> {
+        overlayRoot.setOnTouchListener((view, event) -> {
             scaleDetector.onTouchEvent(event);
 
             switch (event.getActionMasked()) {
@@ -141,7 +161,7 @@ public class FloatingWindowService extends Service {
         });
 
         try {
-            windowManager.addView(floatingCircle, params);
+            windowManager.addView(overlayRoot, params);
             displayHandler.post(refresh);
         } catch (Exception e) {
             stopSelf();
@@ -167,8 +187,8 @@ public class FloatingWindowService extends Service {
         }
 
         try {
-            if (floatingCircle.isAttachedToWindow()) {
-                windowManager.updateViewLayout(floatingCircle, params);
+            if (overlayRoot.isAttachedToWindow()) {
+                windowManager.updateViewLayout(overlayRoot, params);
             }
         } catch (Exception ignored) {
         }
@@ -229,7 +249,7 @@ public class FloatingWindowService extends Service {
         if (floatingCircle != null && windowManager != null) {
             try {
                 if (floatingCircle.isAttachedToWindow()) {
-                    windowManager.removeView(floatingCircle);
+                    windowManager.removeView(overlayRoot);
                 }
             } catch (Exception ignored) {
             }
