@@ -64,6 +64,8 @@ public class ScreenCaptureService extends Service {
     private double previousStableValue = 0;
     private int stableFrames = 0;
     private long lastRoundSentAt;
+    private volatile boolean syncRunning;
+    private long lastSyncAttempt;
     private int captureWidth, captureHeight;
 
     @Override public void onCreate() {
@@ -127,6 +129,7 @@ public class ScreenCaptureService extends Service {
             AnalysisState.update(this, "مراقبة الشاشة — فحص التقديرات على الخادم");
             main.removeCallbacks(estimatePoll);
             main.post(estimatePoll);
+            new Thread(this::syncPendingRounds, "crashai-sync").start();
             statusSocket = new StatusSocket(this);
             statusSocket.connect();
         } catch (Exception e) {
@@ -143,6 +146,10 @@ public class ScreenCaptureService extends Service {
             if (image == null) return;
             long now = SystemClock.elapsedRealtime();
             if (processing || now - lastFrameAt < 350) return;
+            if (now - lastSyncAttempt > 60000) {
+                lastSyncAttempt = now;
+                new Thread(this::syncPendingRounds, "crashai-sync").start();
+            }
             lastFrameAt = now;
             Image.Plane plane = image.getPlanes()[0];
             java.nio.ByteBuffer buffer = plane.getBuffer();
@@ -380,7 +387,19 @@ public class ScreenCaptureService extends Service {
         }, "crashai-journal").start();
     }
 
-    private void sendConfirmed(String multiplier, String roundId) {
+    private void syncPendingRounds() {
+        if (syncRunning) return;
+        syncRunning = true;
+        try (RoundJournal journal = new RoundJournal(this)) {
+            for (String[] row : journal.pending(25)) {
+                if (!sendConfirmed(row[1], row[0])) break;
+            }
+        } catch (Exception ex) {
+            AnalysisState.update(this, "تعذر مزامنة السجل: " + ex.getClass().getSimpleName());
+        } finally { syncRunning = false; }
+    }
+
+    private boolean sendConfirmed(String multiplier, String roundId) {
         HttpURLConnection connection = null;
         try {
             double value = Double.parseDouble(multiplier);
@@ -411,8 +430,10 @@ public class ScreenCaptureService extends Service {
                     AnalysisState.update(this, "تم حفظ " + multiplier + "x بالخادم");
                 } else {
                     AnalysisState.update(this, "استجاب الخادم لكن لم يؤكد الحفظ");
+                    return false;
                 }
-                HttpURLConnection stats = null;
+                return true;
+                /*HttpURLConnection stats = null;
                 try {
                     stats = (HttpURLConnection) new URL(
                             "https://crashai-neo-api.onrender.com/next-estimate?limit=200"
@@ -437,12 +458,14 @@ public class ScreenCaptureService extends Service {
                     }
                 } finally {
                     if (stats != null) stats.disconnect();
-                }
+                }*/
             } else {
                 AnalysisState.update(this, "فشل حفظ الجولة: HTTP " + uploadCode);
+                return false;
             }
         } catch (Exception error) {
             AnalysisState.update(this, "فشل إرسال الجولة: " + error.getClass().getSimpleName());
+            return false;
         } finally { if (connection != null) connection.disconnect(); }
     }
 
