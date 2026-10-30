@@ -272,6 +272,10 @@ public class ScreenCaptureService extends Service {
         double candidate;
         try { candidate = Double.parseDouble(found); } catch (NumberFormatException ex) { return; }
         if (candidate < 1 || candidate > 100000) return;
+        // OCR can move the decimal point (1.20 -> 12.0). Reject sudden
+        // 10x jumps unless a later frame independently confirms them.
+        if (previousStableValue > 0 && candidate >= previousStableValue * 8
+                && !finished && sameReadings < 2) return;
         if ("flying".equals(priorPhase) && previousStableValue > 0 && candidate < previousStableValue * 0.85 && !finished) return;
         if ("flying".equals(priorPhase) && previousStableValue > 0 && candidate > previousStableValue * 4 && !finished) return;
         if (found.equals(previousReading)) sameReadings++;
@@ -408,9 +412,10 @@ public class ScreenCaptureService extends Service {
                     while ((line = in.readLine()) != null) savedResponse.append(line);
                 }
                 JSONObject savedResult = new JSONObject(savedResponse.toString());
-                if (savedResult.optBoolean("saved_to_sqlite", false) || "duplicate_ignored".equals(savedResult.optString("status"))) {
+                if (savedResult.optBoolean("saved_to_sqlite", false) || savedResult.optInt("stored_round_count", 0) > 0 && "duplicate_ignored".equals(savedResult.optString("status"))) {
                     AnalysisState.recorded(this, multiplier);
-                    AnalysisState.update(this, "تم تسجيل " + multiplier + "x");
+                    AnalysisState.progress(this, savedResult.optInt("stored_round_count", 0));
+                    AnalysisState.update(this, "تم حفظ " + multiplier + "x بالخادم");
                 } else {
                     AnalysisState.update(this, "استجاب الخادم لكن لم يؤكد الحفظ");
                 }
