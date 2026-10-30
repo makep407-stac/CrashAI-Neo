@@ -12,6 +12,12 @@ public final class AnalysisState {
   String number=String.format(java.util.Locale.US,"%.2f",value);
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("display",number).putInt("sample_count",count).apply();
  }
+ public static void recorded(Context c,String value) {
+  c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("last_recorded","تم تسجيل " + value + "x").apply();
+ }
+ public static String lastRecorded(Context c) {
+  return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getString("last_recorded","بانتظار تسجيل الجولات");
+ }
  public static String current(Context c) {
   return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getString("display","");
  }
