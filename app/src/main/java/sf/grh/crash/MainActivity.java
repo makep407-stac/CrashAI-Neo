@@ -421,7 +421,14 @@ public class MainActivity extends Activity {
         combinedParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         combinedParams.bottomMargin = dp(145);
         root.addView(combinedButton, combinedParams);
-        combinedButton.setOnClickListener(v -> { requestOverlayPermission(); requestScreenCapture(); });
+        combinedButton.setOnClickListener(v -> {
+            if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(this)) {
+                requestOverlayPermission();
+            } else {
+                startFloatingService();
+                requestScreenCapture();
+            }
+        });
 
         TextView stopButton = makeLabel("إيقاف تسجيل الشاشة", 15, Color.WHITE, true);
         stopButton.setBackground(makeShape(Color.rgb(150, 35, 45), Color.rgb(230, 70, 80), 1));
