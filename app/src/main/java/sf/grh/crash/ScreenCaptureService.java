@@ -176,7 +176,7 @@ public class ScreenCaptureService extends Service {
             for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
                 // Prefer explicit x suffix to avoid unrelated balances and timers.
                 String raw = line.getText();
-                if (!raw.matches("(?i).*\\\\d[.,]\\\\d{1,3}\\\\s*[x×].*")) continue;
+                if (!raw.matches("(?i).*\\d[.,]\\d{1,3}\\s*[x×].*")) continue;
                 Matcher lineMatch = MULTIPLIER.matcher(raw);
                 while (lineMatch.find()) {
                     android.graphics.Rect bounds = line.getBoundingBox();
