@@ -6,13 +6,14 @@ from statistics import mean, median, pstdev
 from time import perf_counter
 from typing import List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from reverse_analysis import inspect_rounds
 from online_learning import learner
 from advanced_statistics import analyze_three_ways
 from round_storage import save_round, recent_rounds
 from forecast_tracking import prepare_forecast, record_outcome, forecast_status
 from screen_reading import validate_completed_round
+from pattern_diagnostics import inspect_structure
 from pydantic import BaseModel, Field, field_validator
 
 app = FastAPI(title="CrashAI Neo API", version="0.8.0")
@@ -242,3 +243,27 @@ def prepare_round(payload: PrepareRoundRequest):
 @app.get("/forecast-status")
 def get_forecast_status():
     return forecast_status()
+
+
+@app.get("/pattern-diagnostics")
+def pattern_diagnostics(limit: int = 500):
+    return inspect_structure([row["multiplier"] for row in recent_rounds(limit)])
+
+
+@app.websocket("/ws/status")
+async def ws_status(websocket: WebSocket):
+    """Public read-only status stream; no credentials or account session exposed."""
+    import asyncio
+    await websocket.accept()
+    try:
+        while True:
+            rows = recent_rounds(500)
+            await websocket.send_json({
+                "type": "status",
+                "sample_count": len(rows),
+                "required_rounds": 20,
+                "estimate": next_estimate(200),
+            })
+            await asyncio.sleep(5)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
