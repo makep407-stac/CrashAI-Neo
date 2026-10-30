@@ -26,6 +26,27 @@ public final class RoundJournal extends SQLiteOpenHelper {
             return c.moveToFirst() ? c.getInt(0) : 0;
         }
     }
+    public synchronized String recentReport(int limit) {
+        StringBuilder out = new StringBuilder("round_id,multiplier,created_at,synced\\n");
+        try (Cursor c = getReadableDatabase().rawQuery(
+                "SELECT round_id,multiplier,created_at,synced FROM rounds ORDER BY created_at DESC LIMIT ?",
+                new String[]{String.valueOf(Math.max(1, Math.min(limit, 1000)))})) {
+            while (c.moveToNext()) {
+                out.append(c.getString(0)).append(',').append(c.getDouble(1)).append(',')
+                   .append(c.getLong(2)).append(',').append(c.getInt(3)).append('\\n');
+            }
+        }
+        return out.toString();
+    }
+    public synchronized java.util.List<String[]> pending(int limit) {
+        java.util.ArrayList<String[]> rows = new java.util.ArrayList<>();
+        try (Cursor c = getReadableDatabase().rawQuery(
+                "SELECT round_id,multiplier FROM rounds WHERE synced=0 ORDER BY created_at ASC LIMIT ?",
+                new String[]{String.valueOf(Math.max(1, Math.min(limit, 100)))})) {
+            while (c.moveToNext()) rows.add(new String[]{c.getString(0), c.getString(1)});
+        }
+        return rows;
+    }
     public synchronized void markSynced(String id) {
         android.content.ContentValues values = new android.content.ContentValues();
         values.put("synced", 1);
