@@ -122,7 +122,6 @@ public class ScreenCaptureService extends Service {
                     reader.getSurface(), null, worker);
             AnalysisState.update(this, "مراقبة الشاشة — فحص التقديرات على الخادم");
             main.removeCallbacks(estimatePoll);
-        if (statusSocket != null) statusSocket.stop();
             main.post(estimatePoll);
             statusSocket = new StatusSocket(this);
             statusSocket.connect();
@@ -437,6 +436,7 @@ public class ScreenCaptureService extends Service {
 
     @Override public void onDestroy() {
         main.removeCallbacks(estimatePoll);
+        if (statusSocket != null) statusSocket.stop();
         if (reader != null) reader.close();
         if (display != null) display.release();
         if (projection != null) projection.stop();
