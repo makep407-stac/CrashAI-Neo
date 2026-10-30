@@ -142,10 +142,12 @@ class CompletedRound(BaseModel):
 def learn_round(payload: CompletedRound):
     try:
         result = learner.add(payload.round_id, payload.final_multiplier)
-        if result["status"] == "learned":
-            saved = save_round(payload.round_id, payload.final_multiplier)
-            result["saved_to_sqlite"] = saved
+        # Always persist: the in-memory learner can outlive/precede SQLite writes.
+        saved = save_round(payload.round_id, payload.final_multiplier)
+        result["saved_to_sqlite"] = saved
+        if saved:
             result["forecast_evaluation"] = record_outcome(payload.round_id, payload.final_multiplier)
+        result["stored_round_count"] = len(recent_rounds(500))
         return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
