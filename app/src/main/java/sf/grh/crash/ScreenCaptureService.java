@@ -57,6 +57,8 @@ public class ScreenCaptureService extends Service {
         }
     };
     private long lastLiveAt;
+    private double previousStableValue = 0;
+    private int stableFrames = 0;
     private long lastRoundSentAt;
 
     @Override public void onCreate() {
@@ -172,7 +174,10 @@ public class ScreenCaptureService extends Service {
         long largestArea = -1;
         for (com.google.mlkit.vision.text.Text.TextBlock block : textResult.getTextBlocks()) {
             for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
-                Matcher lineMatch = MULTIPLIER.matcher(line.getText());
+                // Prefer explicit x suffix to avoid unrelated balances and timers.
+                String raw = line.getText();
+                if (!raw.matches("(?i).*\\\\d[.,]\\\\d{1,3}\\\\s*[x×].*")) continue;
+                Matcher lineMatch = MULTIPLIER.matcher(raw);
                 while (lineMatch.find()) {
                     android.graphics.Rect bounds = line.getBoundingBox();
                     long area = bounds == null ? 0L : (long) bounds.width() * bounds.height();
@@ -209,6 +214,7 @@ public class ScreenCaptureService extends Service {
                 worker.post(() -> requestForecast(upcomingId));
             }
             lastLiveReading = "";
+            previousStableValue = 0;
             previousReading = "";
             sameReadings = 0;
             return;
@@ -233,8 +239,16 @@ public class ScreenCaptureService extends Service {
 
         // Keep the final visible multiplier while the crash banner appears.
         phase = finished ? "finished" : "flying";
+        // Temporal video-frame validation: reject implausible decimal shifts
+        // and prefer readings confirmed by consecutive frames.
+        double candidate;
+        try { candidate = Double.parseDouble(found); } catch (NumberFormatException ex) { return; }
+        if (candidate < 1 || candidate > 100000) return;
+        if ("flying".equals(priorPhase) && previousStableValue > 0 && candidate < previousStableValue * 0.85 && !finished) return;
+        if ("flying".equals(priorPhase) && previousStableValue > 0 && candidate > previousStableValue * 4 && !finished) return;
         if (found.equals(previousReading)) sameReadings++;
         else { previousReading = found; sameReadings = 1; }
+        if (sameReadings >= 2) previousStableValue = candidate;
         if (sameReadings >= 2) {
             lastLiveReading = found;
             lastLiveAt = SystemClock.elapsedRealtime();
