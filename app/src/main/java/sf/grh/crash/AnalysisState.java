@@ -18,8 +18,13 @@ public final class AnalysisState {
  public static String lastRecorded(Context c) {
   return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getString("last_recorded","بانتظار تسجيل الجولات");
  }
+ public static void progress(Context c,int count) {
+  c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putInt("sample_count",Math.max(0,count)).apply();
+ }
  public static String current(Context c) {
-  return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getString("display","");
+  SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+  String value=p.getString("display","");
+  return value.isEmpty() ? p.getInt("sample_count",0)+"/20" : value+"x";
  }
  public static String status(Context c) {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
