@@ -173,8 +173,7 @@ public class ScreenCaptureService extends Service {
     }
 
     private void interpret(com.google.mlkit.vision.text.Text textResult) {
-        String text = textResult.getText();
-        String lower = text.toLowerCase(java.util.Locale.ROOT);
+        String lower = textResult.getText().toLowerCase(java.util.Locale.ROOT);
         boolean countdown = lower.contains("place your bets") || lower.contains("place your bet")
                 || lower.contains("bets are open") || lower.contains("bets are closed")
                 || lower.contains("starting in") || lower.contains("starts in")
@@ -189,113 +188,68 @@ public class ScreenCaptureService extends Service {
         long largestArea = -1;
         for (com.google.mlkit.vision.text.Text.TextBlock block : textResult.getTextBlocks()) {
             for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
-                // Prefer explicit x suffix to avoid unrelated balances and timers.
                 String raw = line.getText();
                 if (!raw.matches("(?i).*\\d[.,]\\d{1,3}\\s*[x×].*")) continue;
-                Matcher lineMatch = MULTIPLIER.matcher(raw);
-                while (lineMatch.find()) {
+                Matcher match = MULTIPLIER.matcher(raw);
+                while (match.find()) {
                     android.graphics.Rect bounds = line.getBoundingBox();
                     long area = bounds == null ? 0L : (long) bounds.width() * bounds.height();
                     if (area > largestArea) {
                         largestArea = area;
-                        found = lineMatch.group(1).replace(',', '.');
+                        found = match.group(1).replace(',', '.');
                     }
                 }
             }
         }
-
-        // Second method: temporal consensus over five video frames.
-        frameVotes.addLast(found == null ? "" : found);
-        while (frameVotes.size() > 5) frameVotes.removeFirst();
-        java.util.Map<String, Integer> votes = new java.util.HashMap<>();
-        for (String v : frameVotes) if (!v.isEmpty()) votes.put(v, votes.containsKey(v) ? votes.get(v) + 1 : 1);
-        String voted = null;
-        int highest = 0;
-        for (java.util.Map.Entry<String, Integer> entry : votes.entrySet()) {
-            if (entry.getValue() > highest) { voted = entry.getKey(); highest = entry.getValue(); }
-        }
-        if (highest >= 2 && found == null && finished) found = voted;
-        // A persistent betting label must not suppress a visible live multiplier.
-        // Count down only when the large multiplier is absent or the round is finished.
-        if (SystemClock.elapsedRealtime() - lastDiagnosticAt > 6000) {
-            lastDiagnosticAt = SystemClock.elapsedRealtime();
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastDiagnosticAt > 6000) {
+            lastDiagnosticAt = now;
             AnalysisState.update(this, found != null ? "قراءة المضاعف: " + found + "x" :
                     (countdown ? "تم اكتشاف شاشة انتظار الجولة" : "التقاط الشاشة يعمل — لم يُكتشف مضاعف بعد"));
         }
-        String priorPhase = phase;
+        // The next betting phase closes the previous round exactly once.
         if (countdown && (found == null || finished)) {
-            phase = "countdown";
-            if ("flying".equals(priorPhase) && !lastLiveReading.isEmpty()
-                    && SystemClock.elapsedRealtime() - lastRecordedAt > 1800) {
-                lastRecorded = lastLiveReading;
-                lastRecordedAt = SystemClock.elapsedRealtime();
+            if ("flying".equals(phase) && !lastLiveReading.isEmpty()) {
                 final String completed = lastLiveReading;
-                final String completedRoundId = currentRoundId;
-                currentRoundId = "";
-                new Thread(() -> sendConfirmed(completed, completedRoundId), "crashai-upload").start();
+                final String id = currentRoundId;
+                lastRecorded = completed;
+                lastRecordedAt = now;
+                new Thread(() -> sendConfirmed(completed, id), "crashai-upload").start();
             }
-            if (currentRoundId.isEmpty()) {
-                currentRoundId = "screen-" + System.currentTimeMillis();
-                final String upcomingId = currentRoundId;
-                new Thread(() -> requestForecast(upcomingId), "crashai-prepare").start();
-            }
+            phase = "countdown";
+            currentRoundId = "";
             lastLiveReading = "";
-            frameVotes.clear();
             previousStableValue = 0;
             previousReading = "";
             sameReadings = 0;
+            frameVotes.clear();
             return;
         }
-
-        if (found == null) {
-            if ((finished || countdown) && "flying".equals(priorPhase) && !lastLiveReading.isEmpty()
-                    && !lastLiveReading.equals(lastRecorded)) {
-                lastRecorded = lastLiveReading;
-                lastRecordedAt = SystemClock.elapsedRealtime();
-                final String completed = lastLiveReading;
-                final String completedRoundId = currentRoundId;
-                new Thread(() -> sendConfirmed(completed, completedRoundId), "crashai-upload").start();
-                currentRoundId = "";
-                phase = "finished";
-                lastLiveReading = "";
-            }
-            previousReading = "";
-            sameReadings = 0;
-            return;
-        }
-
-        // Keep the final visible multiplier while the crash banner appears.
-        if (currentRoundId.isEmpty() && !finished) currentRoundId = "screen-" + System.currentTimeMillis();
-        phase = finished ? "finished" : "flying";
-        // Temporal video-frame validation: reject implausible decimal shifts
-        // and prefer readings confirmed by consecutive frames.
+        if (found == null) return;
         double candidate;
         try { candidate = Double.parseDouble(found); } catch (NumberFormatException ex) { return; }
         if (candidate < 1 || candidate > 100000) return;
-        // OCR can move the decimal point (1.20 -> 12.0). Reject sudden
-        // 10x jumps unless a later frame independently confirms them.
-        if (previousStableValue > 0 && candidate >= previousStableValue * 8
-                && !finished && sameReadings < 2) return;
-        if ("flying".equals(priorPhase) && previousStableValue > 0 && candidate < previousStableValue * 0.85 && !finished) return;
-        if ("flying".equals(priorPhase) && previousStableValue > 0 && candidate > previousStableValue * 4 && !finished) return;
-        if (found.equals(previousReading)) sameReadings++;
-        else { previousReading = found; sameReadings = 1; }
-        if (sameReadings >= 2) previousStableValue = candidate;
-        if (sameReadings >= 2) {
-            lastLiveReading = found;
-            lastLiveAt = SystemClock.elapsedRealtime();
+        if ("countdown".equals(phase) || "finished".equals(phase) || currentRoundId.isEmpty()) {
+            currentRoundId = "screen-" + System.currentTimeMillis();
+            previousStableValue = 0;
+            lastLiveReading = "";
         }
-
-        // A crash banner may appear for only one OCR frame; use the latest stable
-        // reading when the final text itself cannot be confirmed twice.
-        if (finished && (sameReadings >= 2 || !lastLiveReading.isEmpty())) {
-            found = sameReadings >= 2 ? found : lastLiveReading;
-            if (SystemClock.elapsedRealtime() - lastRecordedAt < 1800) return;
-            lastRecorded = found;
-            lastRecordedAt = SystemClock.elapsedRealtime();
-            final String completed = found;
-            final String completedRoundId = currentRoundId;
-            new Thread(() -> sendConfirmed(completed, completedRoundId), "crashai-upload").start();
+        // Reject obvious OCR jumps, but do not demand the same rapidly changing
+        // multiplier in consecutive frames.
+        if (previousStableValue > 0 && !finished &&
+                (candidate < previousStableValue * 0.85 || candidate > previousStableValue * 4)) return;
+        if (previousStableValue <= 0 || candidate >= previousStableValue || finished) {
+            previousStableValue = candidate;
+            lastLiveReading = found;
+            lastLiveAt = now;
+        }
+        phase = finished ? "finished" : "flying";
+        if (finished && !lastLiveReading.isEmpty()) {
+            final String completed = lastLiveReading;
+            final String id = currentRoundId;
+            lastRecorded = completed;
+            lastRecordedAt = now;
+            new Thread(() -> sendConfirmed(completed, id), "crashai-upload").start();
             currentRoundId = "";
             lastLiveReading = "";
         }
