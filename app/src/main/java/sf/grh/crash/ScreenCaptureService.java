@@ -405,7 +405,8 @@ public class ScreenCaptureService extends Service {
             try (OutputStream out = connection.getOutputStream()) {
                 out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
             }
-            if (connection.getResponseCode() / 100 == 2) {
+            int uploadCode = connection.getResponseCode();
+            if (uploadCode / 100 == 2) {
                 StringBuilder savedResponse = new StringBuilder();
                 try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
                     String line;
@@ -445,9 +446,11 @@ public class ScreenCaptureService extends Service {
                 } finally {
                     if (stats != null) stats.disconnect();
                 }
+            } else {
+                AnalysisState.update(this, "فشل حفظ الجولة: HTTP " + uploadCode);
             }
-        } catch (Exception ignored) {
-            AnalysisState.update(this, "قراءة " + multiplier + "x — الخادم غير متاح");
+        } catch (Exception error) {
+            AnalysisState.update(this, "فشل إرسال الجولة: " + error.getClass().getSimpleName());
         } finally { if (connection != null) connection.disconnect(); }
     }
 
