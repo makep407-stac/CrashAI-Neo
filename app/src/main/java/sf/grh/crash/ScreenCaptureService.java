@@ -140,7 +140,7 @@ public class ScreenCaptureService extends Service {
             image = source.acquireLatestImage();
             if (image == null) return;
             long now = SystemClock.elapsedRealtime();
-            if (processing || now - lastFrameAt < 650) return;
+            if (processing || now - lastFrameAt < 350) return;
             lastFrameAt = now;
             Image.Plane plane = image.getPlanes()[0];
             java.nio.ByteBuffer buffer = plane.getBuffer();
@@ -193,7 +193,7 @@ public class ScreenCaptureService extends Service {
                 Matcher match = MULTIPLIER.matcher(raw);
                 while (match.find()) {
                     android.graphics.Rect bounds = line.getBoundingBox();
-                    long area = bounds == null ? 0L : (long) bounds.width() * bounds.height();
+                    long area = bounds == null ? 0L : (long) bounds.height();
                     if (area > largestArea) {
                         largestArea = area;
                         found = match.group(1).replace(',', '.');
@@ -214,7 +214,7 @@ public class ScreenCaptureService extends Service {
                 final String id = currentRoundId;
                 lastRecorded = completed;
                 lastRecordedAt = now;
-                new Thread(() -> sendConfirmed(completed, id), "crashai-upload").start();
+                saveAndUpload(completed, id);
             }
             phase = "countdown";
             currentRoundId = "";
@@ -313,8 +313,8 @@ public class ScreenCaptureService extends Service {
             connection = (HttpURLConnection) new URL("https://crashai-neo-api.onrender.com/prepare-round").openConnection();
             connection.setRequestMethod("POST");
             connection.setDoOutput(true);
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(10000);
+            connection.setConnectTimeout(75000);
+            connection.setReadTimeout(75000);
             connection.setRequestProperty("Content-Type", "application/json");
             try (OutputStream out = connection.getOutputStream()) {
                 out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -342,6 +342,21 @@ public class ScreenCaptureService extends Service {
             if (connection != null) connection.disconnect();
         }
     }
+    private void saveAndUpload(String multiplier, String roundId) {
+        final String safeId = roundId == null || roundId.isEmpty() ? "screen-" + System.currentTimeMillis() : roundId;
+        new Thread(() -> {
+            try (RoundJournal journal = new RoundJournal(this)) {
+                if (!journal.save(safeId, Double.parseDouble(multiplier))) return;
+                AnalysisState.recorded(this, multiplier);
+                AnalysisState.progress(this, journal.count());
+                AnalysisState.update(this, "تم حفظ الجولة محليًا: " + multiplier + "x");
+                sendConfirmed(multiplier, safeId);
+            } catch (Exception ex) {
+                AnalysisState.update(this, "تعذر حفظ الجولة محليًا: " + ex.getClass().getSimpleName());
+            }
+        }, "crashai-journal").start();
+    }
+
     private void sendConfirmed(String multiplier, String roundId) {
         HttpURLConnection connection = null;
         try {
@@ -368,7 +383,7 @@ public class ScreenCaptureService extends Service {
                 }
                 JSONObject savedResult = new JSONObject(savedResponse.toString());
                 if (savedResult.optBoolean("saved_to_sqlite", false) || savedResult.optInt("stored_round_count", 0) > 0 && "duplicate_ignored".equals(savedResult.optString("status"))) {
-                    AnalysisState.recorded(this, multiplier);
+                    try (RoundJournal journal = new RoundJournal(this)) { journal.markSynced(roundId); }
                     AnalysisState.progress(this, savedResult.optInt("stored_round_count", 0));
                     AnalysisState.update(this, "تم حفظ " + multiplier + "x بالخادم");
                 } else {
