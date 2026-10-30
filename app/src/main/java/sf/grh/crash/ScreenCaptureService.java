@@ -254,8 +254,11 @@ public class ScreenCaptureService extends Service {
             lastLiveAt = SystemClock.elapsedRealtime();
         }
 
-        // If the end marker appears with the final multiplier, wait for two matching frames.
-        if (finished && sameReadings >= 2 && !found.equals(lastRecorded)) {
+        // A crash banner may appear for only one OCR frame; use the latest stable
+        // reading when the final text itself cannot be confirmed twice.
+        if (finished && (sameReadings >= 2 || !lastLiveReading.isEmpty())) {
+            found = sameReadings >= 2 ? found : lastLiveReading;
+            if (found.equals(lastRecorded)) return;
             lastRecorded = found;
             lastRecordedAt = SystemClock.elapsedRealtime();
             final String completed = found;
