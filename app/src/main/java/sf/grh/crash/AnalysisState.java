@@ -12,6 +12,10 @@ public final class AnalysisState {
   String number=String.format(java.util.Locale.US,"%.2f",value);
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("display",number).putInt("sample_count",count).apply();
  }
+ public static void diagnostic(Context c,String key) {
+  SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+  p.edit().putInt(key,p.getInt(key,0)+1).apply();
+ }
  public static void recorded(Context c,String value) {
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("last_recorded","تم تسجيل " + value + "x").apply();
  }
@@ -32,6 +36,6 @@ public final class AnalysisState {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
   int local = 0;
   try (RoundJournal journal = new RoundJournal(c)) { local = journal.count(); } catch (Exception ignored) {}
-  return p.getString("status","جمع البيانات: يلزم حفظ 20 جولة أولاً")+" • جولات الهاتف: "+local+" • جولات الخادم: "+p.getInt("sample_count",0)+" • تقدير تاريخي وليس تنبؤًا مثبتًا";
+  return p.getString("status","جمع البيانات: يلزم حفظ 20 جولة أولاً")+" • جولات الهاتف: "+local+" • جولات الخادم: "+p.getInt("sample_count",0)+" • إطار:"+p.getInt("frames",0)+" OCR:"+p.getInt("ocr",0)+" رقم:"+p.getInt("multipliers",0)+" حفظ:"+p.getInt("saves",0)+" • تقدير تاريخي وليس تنبؤًا مثبتًا";
  }
 }
