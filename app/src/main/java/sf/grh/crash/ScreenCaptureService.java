@@ -53,6 +53,7 @@ public class ScreenCaptureService extends Service {
     private String lastLiveReading = "";
     private long lastFrameAt;
     private long lastDiagnosticAt;
+    private long lastSignalTraceAt;
     private String currentRoundId = "";
     private final Runnable estimatePoll = new Runnable() {
         @Override public void run() {
@@ -387,6 +388,11 @@ public class ScreenCaptureService extends Service {
 
     // Privacy-safe screen event telemetry: sends event metadata only, never screenshots or credentials.
     private void sendSignalTrace(String eventType, String eventPhase, String roundId) {
+        long traceNow = SystemClock.elapsedRealtime();
+        synchronized (this) {
+            if (traceNow - lastSignalTraceAt < 500L) return;
+            lastSignalTraceAt = traceNow;
+        }
         new Thread(() -> {
             HttpURLConnection connection = null;
             try {
