@@ -364,7 +364,7 @@ public class ScreenCaptureService extends Service {
                 AnalysisState.updateMultiplier(this, json.getDouble("estimate_multiplier"), count);
                 AnalysisState.update(this, "تم جلب التقدير الإحصائي من الخادم");
             } else {
-                AnalysisState.update(this, "الخادم يملك " + count + " من 20 جولة");
+                AnalysisState.update(this, "الجولات المتاحة: " + count + " — بانتظار بيانات كافية لتحسين الإحصاء");
             }
         } catch (Exception e) {
             AnalysisState.update(this, "فشل جلب التقدير: " + e.getClass().getSimpleName());
@@ -399,7 +399,7 @@ public class ScreenCaptureService extends Service {
                     AnalysisState.update(this, "تقدير إحصائي جاهز للجولة");
                 } else if (!parsed.optBoolean("available", false)) {
                     AnalysisState.progress(this, parsed.optInt("sample_count", 0));
-                    AnalysisState.update(this, "الخادم سجل " + parsed.optInt("sample_count", 0) + " من 20 جولة مطلوبة");
+                    AnalysisState.update(this, "الجولات المتاحة: " + parsed.optInt("sample_count", 0));
                 }
             } else {
                 AnalysisState.update(this, "طلب التقدير فشل: HTTP " + connection.getResponseCode());
