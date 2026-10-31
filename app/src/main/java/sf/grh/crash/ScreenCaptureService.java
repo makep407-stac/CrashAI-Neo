@@ -57,7 +57,7 @@ public class ScreenCaptureService extends Service {
     private final Runnable estimatePoll = new Runnable() {
         @Override public void run() {
             new Thread(() -> fetchEstimateForDisplay(), "crashai-estimate-poll").start();
-            main.postDelayed(this, 15000);
+            main.postDelayed(this, 5000);
         }
     };
     private long lastLiveAt;
@@ -148,7 +148,7 @@ public class ScreenCaptureService extends Service {
             image = source.acquireLatestImage();
             if (image == null) return;
             long now = SystemClock.elapsedRealtime();
-            if (processing || now - lastFrameAt < 350) return;
+            if (processing || now - lastFrameAt < 250) return;
             if (now - lastSyncAttempt > 60000) {
                 lastSyncAttempt = now;
                 new Thread(this::syncPendingRounds, "crashai-sync").start();
@@ -256,7 +256,7 @@ public class ScreenCaptureService extends Service {
         if (found == null) {
             if ("flying".equals(phase) && !lastLiveReading.isEmpty()) {
                 if (multiplierMissingSince == 0) multiplierMissingSince = now;
-                if (liveFramesSeen >= 2 && now - multiplierMissingSince >= 900L
+                if (liveFramesSeen >= 2 && now - multiplierMissingSince >= 650L
                         && now - lastLiveAt <= 8000L && !currentRoundId.isEmpty()) {
                     String completed = lastLiveReading;
                     String completedId = currentRoundId;
@@ -420,6 +420,7 @@ public class ScreenCaptureService extends Service {
                 AnalysisState.progress(this, journal.count());
                 AnalysisState.update(this, "تم حفظ الجولة محليًا: " + multiplier + "x");
                 sendConfirmed(multiplier, safeId);
+                fetchEstimateForDisplay();
             } catch (Exception ex) {
                 AnalysisState.update(this, "تعذر حفظ الجولة محليًا: " + ex.getClass().getSimpleName());
             }
