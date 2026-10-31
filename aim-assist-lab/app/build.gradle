@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.aimassist.lab'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.aimassist.lab'
+        minSdk 23
+        targetSdk 32
+        versionCode 1
+        versionName '0.1'
+    }
+}
