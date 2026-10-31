@@ -61,6 +61,8 @@ public class ScreenCaptureService extends Service {
         }
     };
     private long lastLiveAt;
+    private long multiplierMissingSince;
+    private int liveFramesSeen;
     private double previousStableValue = 0;
     private int stableFrames = 0;
     private long lastRoundSentAt;
@@ -235,6 +237,8 @@ public class ScreenCaptureService extends Service {
                 AnalysisState.update(this, "اختفت الطائرة — حفظ آخر قراءة: " + completed + "x");
             }
             phase = "countdown";
+            multiplierMissingSince = 0;
+            liveFramesSeen = 0;
             currentRoundId = "";
             lastLiveReading = "";
             previousStableValue = 0;
@@ -244,12 +248,25 @@ public class ScreenCaptureService extends Service {
             return;
         }
         if (found == null) {
-            if (finished) {
-                phase = "finished";
-                AnalysisState.update(this, "نهاية الجولة ظاهرة لكن الرقم النهائي غير مقروء — لم تُحفظ");
+            if ("flying".equals(phase) && !lastLiveReading.isEmpty()) {
+                if (multiplierMissingSince == 0) multiplierMissingSince = now;
+                if (liveFramesSeen >= 3 && now - multiplierMissingSince >= 1800L
+                        && now - lastLiveAt <= 8000L && !currentRoundId.isEmpty()) {
+                    String completed = lastLiveReading;
+                    String completedId = currentRoundId;
+                    phase = "countdown";
+                    currentRoundId = "";
+                    lastLiveReading = "";
+                    liveFramesSeen = 0;
+                    multiplierMissingSince = 0;
+                    previousStableValue = 0;
+                    saveAndUpload(completed, completedId);
+                    AnalysisState.update(this, "حفظ قراءة تقريبية بعد اختفاء المضاعف: " + completed + "x");
+                }
             }
             return;
         }
+        multiplierMissingSince = 0;
         double candidate;
         try { candidate = Double.parseDouble(found); } catch (NumberFormatException ex) { return; }
         if (candidate < 1 || candidate > 100000) return;
@@ -257,6 +274,7 @@ public class ScreenCaptureService extends Service {
             currentRoundId = "screen-" + System.currentTimeMillis();
             previousStableValue = 0;
             lastLiveReading = "";
+            liveFramesSeen = 0;
         }
         // Reject obvious OCR jumps, but do not demand the same rapidly changing
         // multiplier in consecutive frames.
@@ -266,6 +284,7 @@ public class ScreenCaptureService extends Service {
             previousStableValue = candidate;
             lastLiveReading = found;
             lastLiveAt = now;
+            liveFramesSeen++;
         }
         phase = finished ? "finished" : "flying";
         if (now - lastDiagnosticAt > 2500) {
