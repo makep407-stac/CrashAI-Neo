@@ -377,6 +377,7 @@ public class ScreenCaptureService extends Service {
             if (json.optBoolean("available", false)) {
                 AnalysisState.updateMultiplier(this, json.getDouble("estimate_multiplier"), count);
                 AnalysisState.update(this, "تم جلب التقدير الإحصائي من الخادم");
+                fetchForecastEvaluationStatus();
             } else {
                 AnalysisState.update(this, "الجولات المتاحة: " + count + " — بانتظار بيانات كافية لتحسين الإحصاء");
             }
@@ -385,6 +386,31 @@ public class ScreenCaptureService extends Service {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private void fetchForecastEvaluationStatus() {
+        new Thread(() -> {
+            HttpURLConnection conn = null;
+            try {
+                conn = (HttpURLConnection) new URL("https://crashai-neo-api.onrender.com/forecast-status").openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                if (conn.getResponseCode() != 200) return;
+                StringBuilder body = new StringBuilder();
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = in.readLine()) != null) body.append(line);
+                }
+                JSONObject data = new JSONObject(body.toString());
+                int evaluated = data.optInt("evaluated_count", 0);
+                String mae = data.isNull("mean_absolute_error") ? "—" : data.optString("mean_absolute_error", "—");
+                getSharedPreferences("crashai_analysis", MODE_PRIVATE).edit()
+                        .putInt("evaluated_forecasts", evaluated).putString("forecast_mae", mae).apply();
+            } catch (Exception ignored) {
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }, "crashai-evaluation-status").start();
     }
 
     private void requestForecast(String roundId) {
