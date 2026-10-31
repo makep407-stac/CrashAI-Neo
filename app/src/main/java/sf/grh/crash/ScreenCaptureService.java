@@ -172,8 +172,9 @@ public class ScreenCaptureService extends Service {
             unchangedFrames = fingerprint == previousFrameFingerprint ? unchangedFrames + 1 : 0;
             previousFrameFingerprint = fingerprint;
             processing = true;
+            AnalysisState.diagnostic(this, "frames");
             recognizer.process(InputImage.fromBitmap(frame, 0))
-                    .addOnSuccessListener(result -> interpret(result))
+                    .addOnSuccessListener(result -> { AnalysisState.diagnostic(this, "ocr"); interpret(result); })
                     .addOnFailureListener(e -> AnalysisState.update(this, "خطأ في قراءة الشاشة"))
                     .addOnCompleteListener(task -> { processing = false; frame.recycle(); });
         } catch (Exception e) {
@@ -219,6 +220,7 @@ public class ScreenCaptureService extends Service {
                 }
             }
         }
+        if (found != null) AnalysisState.diagnostic(this, "multipliers");
         long now = SystemClock.elapsedRealtime();
         if (now - lastDiagnosticAt > 6000) {
             lastDiagnosticAt = now;
@@ -408,6 +410,7 @@ public class ScreenCaptureService extends Service {
         new Thread(() -> {
             try (RoundJournal journal = new RoundJournal(this)) {
                 if (!journal.save(safeId, Double.parseDouble(multiplier))) return;
+                AnalysisState.diagnostic(this, "saves");
                 AnalysisState.recorded(this, multiplier);
                 AnalysisState.progress(this, journal.count());
                 AnalysisState.update(this, "تم حفظ الجولة محليًا: " + multiplier + "x");
