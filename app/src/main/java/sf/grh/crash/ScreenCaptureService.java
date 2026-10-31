@@ -68,6 +68,7 @@ public class ScreenCaptureService extends Service {
     private int stableFrames = 0;
     private long lastRoundSentAt;
     private volatile boolean syncRunning;
+    private final java.util.concurrent.ExecutorService journalQueue = java.util.concurrent.Executors.newSingleThreadExecutor();
     private long lastSyncAttempt;
     private int captureWidth, captureHeight;
 
@@ -254,6 +255,17 @@ public class ScreenCaptureService extends Service {
             return;
         }
         if (found == null) {
+            if (finished && "flying".equals(phase) && !lastLiveReading.isEmpty()
+                    && !currentRoundId.isEmpty() && now - lastLiveAt <= 5000L) {
+                String completed = lastLiveReading;
+                String id = currentRoundId;
+                phase = "finished";
+                currentRoundId = "";
+                lastLiveReading = "";
+                multiplierMissingSince = 0;
+                saveAndUpload(completed, id);
+                return;
+            }
             if ("flying".equals(phase) && !lastLiveReading.isEmpty()) {
                 if (multiplierMissingSince == 0) multiplierMissingSince = now;
                 if (liveFramesSeen >= 2 && now - multiplierMissingSince >= 650L
@@ -412,7 +424,7 @@ public class ScreenCaptureService extends Service {
     }
     private void saveAndUpload(String multiplier, String roundId) {
         final String safeId = roundId == null || roundId.isEmpty() ? "screen-" + System.currentTimeMillis() : roundId;
-        new Thread(() -> {
+        journalQueue.execute(() -> {
             try (RoundJournal journal = new RoundJournal(this)) {
                 if (!journal.save(safeId, Double.parseDouble(multiplier))) return;
                 AnalysisState.diagnostic(this, "saves");
@@ -424,7 +436,7 @@ public class ScreenCaptureService extends Service {
             } catch (Exception ex) {
                 AnalysisState.update(this, "تعذر حفظ الجولة محليًا: " + ex.getClass().getSimpleName());
             }
-        }, "crashai-journal").start();
+        });
     }
 
     private void syncPendingRounds() {
