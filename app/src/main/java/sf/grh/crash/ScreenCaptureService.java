@@ -291,6 +291,8 @@ public class ScreenCaptureService extends Service {
         if (candidate < 1 || candidate > 100000) return;
         if ("countdown".equals(phase) || "finished".equals(phase) || currentRoundId.isEmpty()) {
             currentRoundId = "screen-" + System.currentTimeMillis();
+            final String forecastRoundId = currentRoundId;
+            new Thread(() -> requestForecast(forecastRoundId), "crashai-pre-round-forecast").start();
             previousStableValue = 0;
             lastLiveReading = "";
             liveFramesSeen = 0;
@@ -393,8 +395,8 @@ public class ScreenCaptureService extends Service {
             connection = (HttpURLConnection) new URL("https://crashai-neo-api.onrender.com/prepare-round").openConnection();
             connection.setRequestMethod("POST");
             connection.setDoOutput(true);
-            connection.setConnectTimeout(75000);
-            connection.setReadTimeout(75000);
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(10000);
             connection.setRequestProperty("Content-Type", "application/json");
             try (OutputStream out = connection.getOutputStream()) {
                 out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -408,7 +410,7 @@ public class ScreenCaptureService extends Service {
                 JSONObject parsed = new JSONObject(json.toString());
                 if (parsed.optBoolean("available", false) && roundId.equals(currentRoundId)) {
                     AnalysisState.updateMultiplier(this, parsed.getDouble("estimate_multiplier"), parsed.optInt("sample_count", 0));
-                    AnalysisState.update(this, "تقدير إحصائي جاهز للجولة");
+                    AnalysisState.update(this, "تم تسجيل تقدير مسبق للجولة للمقارنة لاحقًا");
                 } else if (!parsed.optBoolean("available", false)) {
                     AnalysisState.progress(this, parsed.optInt("sample_count", 0));
                     AnalysisState.update(this, "الجولات المتاحة: " + parsed.optInt("sample_count", 0));
