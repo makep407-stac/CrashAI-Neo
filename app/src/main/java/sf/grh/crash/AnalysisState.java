@@ -36,6 +36,6 @@ public final class AnalysisState {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
   int local = 0;
   try (RoundJournal journal = new RoundJournal(c)) { local = journal.count(); } catch (Exception ignored) {}
-  return p.getString("status","جمع البيانات: يلزم حفظ 20 جولة أولاً")+" • جولات الهاتف: "+local+" • جولات الخادم: "+p.getInt("sample_count",0)+" • إطار:"+p.getInt("frames",0)+" OCR:"+p.getInt("ocr",0)+" رقم:"+p.getInt("multipliers",0)+" حفظ:"+p.getInt("saves",0)+" • تقدير تاريخي وليس تنبؤًا مثبتًا";
+  return p.getString("status","جمع البيانات: يلزم حفظ 20 جولة أولاً")+" • جولات الهاتف: "+local+" • جولات الخادم: "+p.getInt("sample_count",0)+" • إطار:"+p.getInt("frames",0)+" OCR:"+p.getInt("ocr",0)+" رقم:"+p.getInt("multipliers",0)+" حفظ:"+p.getInt("saves",0)+" • تقييم:"+p.getInt("evaluated_forecasts",0)+" خطأ متوسط:"+p.getString("forecast_mae","—")+" • تقدير تاريخي وليس تنبؤًا مثبتًا";
  }
 }
