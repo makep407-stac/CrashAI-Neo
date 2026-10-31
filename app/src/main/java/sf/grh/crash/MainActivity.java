@@ -32,8 +32,8 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
 
     private static final int BG = Color.rgb(3, 5, 10);
-    private static final int BLUE = Color.rgb(30, 145, 255);
-    private static final int MUTED = Color.rgb(120, 145, 175);
+    private static final int BLUE = Color.rgb(255, 125, 35);
+    private static final int MUTED = Color.rgb(157, 164, 178);
 
     private static final int OVERLAY_PERMISSION_REQUEST = 701;
     private static final int CAPTURE_PERMISSION_REQUEST = 702;
@@ -184,7 +184,7 @@ public class MainActivity extends Activity {
         root.addView(logo, lp(-1, 58));
 
         TextView subtitle = makeLabel(
-                "CRASH INTELLIGENCE", 11, MUTED, false
+                "NEO // FLIGHT INTELLIGENCE", 11, MUTED, false
         );
         root.addView(subtitle, lp(-1, 35));
 
@@ -299,7 +299,7 @@ public class MainActivity extends Activity {
 
         // زر تشغيل النافذة العائمة أعلى اليسار.
         TextView overlayButton = makeLabel(
-                "نافذة", 13, BLUE, true
+                "LIVE", 12, BLUE, true
         );
 
         FrameLayout.LayoutParams buttonParams =
@@ -323,7 +323,7 @@ public class MainActivity extends Activity {
 
         // زر OUT الصغير أعلى اليمين.
         TextView logoutButton = makeLabel(
-                "OUT", 12, BLUE, true
+                "EXIT", 11, BLUE, true
         );
 
         FrameLayout.LayoutParams logoutParams =
@@ -354,8 +354,8 @@ public class MainActivity extends Activity {
         View outerGlow = new View(this);
 
         outerGlow.setBackground(makeCircle(
-                Color.rgb(7, 20, 38),
-                Color.rgb(15, 90, 170),
+                Color.rgb(35, 15, 8),
+                Color.rgb(255, 105, 25),
                 2
         ));
 
@@ -370,9 +370,9 @@ public class MainActivity extends Activity {
         View innerCircle = new View(this);
 
         innerCircle.setBackground(makeCircle(
-                Color.rgb(3, 8, 16),
-                BLUE,
-                3
+                Color.rgb(12, 8, 7),
+                Color.rgb(255, 145, 55),
+                2
         ));
 
         FrameLayout.LayoutParams innerParams =
@@ -382,7 +382,7 @@ public class MainActivity extends Activity {
 
         center.addView(innerCircle, innerParams);
 
-        analysisLabel = makeLabel(AnalysisState.current(this), 25, BLUE, true);
+        analysisLabel = makeLabel(AnalysisState.current(this), 29, Color.rgb(255, 170, 75), true);
         TextView core = analysisLabel;
 
         FrameLayout.LayoutParams coreParams =
@@ -407,13 +407,13 @@ public class MainActivity extends Activity {
 
         root.addView(center, centerParams);
 
-        TextView captureButton = makeLabel("بدء قراءة الشاشة", 16, Color.WHITE, true);
+        TextView captureButton = makeLabel("بدء التحليل المباشر", 16, Color.WHITE, true);
         captureButton.setBackground(makeShape(BLUE, BLUE, 1));
         FrameLayout.LayoutParams captureParams = new FrameLayout.LayoutParams(dp(220), dp(50));
         captureParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         captureParams.bottomMargin = dp(85);
         root.addView(captureButton, captureParams);
-        TextView journalButton = makeLabel("سجل الجولات المحلية", 14, Color.WHITE, true);
+        TextView journalButton = makeLabel("سجل الرحلات والجولات", 14, Color.WHITE, true);
         journalButton.setBackground(makeShape(Color.rgb(20, 75, 95), BLUE, 1));
         FrameLayout.LayoutParams journalParams = new FrameLayout.LayoutParams(dp(220), dp(46));
         journalParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
@@ -439,7 +439,7 @@ public class MainActivity extends Activity {
 
         captureButton.setOnClickListener(v -> requestScreenCapture());
 
-        TextView combinedButton = makeLabel("تشغيل النافذة + القراءة", 14, Color.WHITE, true);
+        TextView combinedButton = makeLabel("تشغيل NEO // LIVE", 14, Color.WHITE, true);
         combinedButton.setBackground(makeShape(Color.rgb(20, 90, 125), BLUE, 1));
         FrameLayout.LayoutParams combinedParams = new FrameLayout.LayoutParams(dp(220), dp(46));
         combinedParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
