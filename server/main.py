@@ -221,7 +221,16 @@ def next_estimate(limit: int = 200):
     baseline = median(rounds)
     recent = median(rounds[-min(50, len(rounds)):])
     estimate = round(0.75 * baseline + 0.25 * recent, 2)
+    ordered = sorted(rounds)
+    def percentile(q):
+        index = (len(ordered) - 1) * q
+        lo, hi = int(index), min(int(index) + 1, len(ordered) - 1)
+        return round(ordered[lo] + (ordered[hi] - ordered[lo]) * (index - lo), 2)
+    thresholds = {str(t): round(100 * sum(v >= t for v in rounds) / len(rounds), 1) for t in (1.5, 2, 3, 5, 10)}
     return {"available": True, "estimate_multiplier": estimate,
+            "historical_range_p25_p75": [percentile(0.25), percentile(0.75)],
+            "historical_threshold_percentages": thresholds,
+            "recent_20_median": round(median(rounds[-20:]), 2),
             "sample_count": len(rounds), "method": "robust_historical_median_blend",
             "validated_next_round_prediction": False,
             "note": "Historical point estimate only; no demonstrated predictive power."}
