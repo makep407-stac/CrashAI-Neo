@@ -254,7 +254,7 @@ public class ScreenCaptureService extends Service {
         // The next betting phase closes the previous round exactly once.
         if (countdown && found == null) consecutiveCountdownFrames++;
         else consecutiveCountdownFrames = 0;
-        if (countdown && found == null && consecutiveCountdownFrames >= 2) {
+        if (countdown && found == null && consecutiveCountdownFrames >= 2 && !"countdown".equals(phase)) {
             // The chart's countdown follows the plane disappearing. Save the last
             // recently observed multiplier once; it is an observed approximation.
             // Close the previous round under its own ID BEFORE allocating the next ID.
