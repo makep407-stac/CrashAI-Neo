@@ -14,6 +14,8 @@ from round_storage import save_round, recent_rounds
 from forecast_tracking import prepare_forecast, record_outcome, forecast_status
 from screen_reading import validate_completed_round
 from pattern_diagnostics import inspect_structure
+from neural_engine import select_single_estimate
+from signal_trace import record_signal_event, signal_trace_status
 from pydantic import BaseModel, Field, field_validator
 
 app = FastAPI(title="CrashAI Neo API", version="0.8.0")
@@ -209,29 +211,8 @@ def login(payload: LoginRequest):
 
 
 def responsive_historical_estimate(rounds):
-    """Choose recent-history model only when walk-forward testing beats a robust baseline."""
-    if not rounds:
-        return 2.0
-    def baseline(history):
-        return median(history[-min(100, len(history)):])
-    def candidate(history):
-        # Log-space short window is robust to rare extreme outcomes.
-        import math
-        recent = history[-min(12, len(history)):]
-        return math.exp(sum(math.log(max(1.0, x)) for x in recent) / len(recent))
-    if len(rounds) < 40:
-        return round(baseline(rounds), 2)
-    start = max(20, len(rounds) - 60)
-    baseline_error = 0.0
-    candidate_error = 0.0
-    for i in range(start, len(rounds)):
-        actual = min(rounds[i], 20.0)
-        baseline_error += abs(min(baseline(rounds[:i]), 20.0) - actual)
-        candidate_error += abs(min(candidate(rounds[:i]), 20.0) - actual)
-    # Require a meaningful improvement before using a responsive estimator.
-    if candidate_error < baseline_error * 0.95:
-        return round(candidate(rounds), 2)
-    return round(baseline(rounds), 2)
+    """Single-number estimate selected only by chronological walk-forward tests."""
+    return select_single_estimate(rounds)["estimate_multiplier"]
 
 
 @app.get("/next-estimate")
@@ -249,7 +230,8 @@ def next_estimate(limit: int = 200):
     # Avoid an apparent high-precision prediction: two decimals are display precision only.
     baseline = median(rounds)
     recent = median(rounds[-min(50, len(rounds)):])
-    estimate = responsive_historical_estimate(rounds)
+    neural = select_single_estimate(rounds)
+    estimate = neural["estimate_multiplier"]
     ordered = sorted(rounds)
     def percentile(q):
         index = (len(ordered) - 1) * q
@@ -260,9 +242,10 @@ def next_estimate(limit: int = 200):
             "historical_range_p25_p75": [percentile(0.25), percentile(0.75)],
             "historical_threshold_percentages": thresholds,
             "recent_20_median": round(median(rounds[-20:]), 2),
-            "sample_count": len(rounds), "method": "walk_forward_selected_robust_estimator",
-            "validated_next_round_prediction": False,
-            "note": "Historical point estimate only; no demonstrated predictive power."}
+            "sample_count": len(rounds), "method": neural["selected_model"],
+            "neural_engine": neural,
+            "validated_next_round_prediction": neural["validated_predictive_edge"],
+            "note": "Single-number historical estimate. An edge is reported only when chronological tests beat the median baseline; no outcome is guaranteed."}
 
 
 class PrepareRoundRequest(BaseModel):
@@ -275,8 +258,10 @@ def prepare_round(payload: PrepareRoundRequest):
     rounds = [row["multiplier"] for row in recent_rounds(200)]
     if not rounds:
         return prepare_forecast(payload.round_id, 2.0, 0)
-    estimate = responsive_historical_estimate(rounds)
-    return prepare_forecast(payload.round_id, estimate, len(rounds))
+    neural = select_single_estimate(rounds)
+    result = prepare_forecast(payload.round_id, neural["estimate_multiplier"], len(rounds))
+    result["neural_engine"] = neural
+    return result
 
 
 @app.get("/forecast-status")
@@ -337,3 +322,35 @@ async def ws_status(websocket: WebSocket):
             await asyncio.sleep(5)
     except (WebSocketDisconnect, RuntimeError):
         pass
+
+
+class SignalEventRequest(BaseModel):
+    event_type: str = Field(pattern="^(round_visible|countdown_seen|multiplier_visible|result_label_seen|manual_network_event)$")
+    source_host: str = Field(default="screen-ocr", max_length=253)
+    round_id: str = Field(default="", max_length=128)
+    observed_at: str = Field(min_length=10, max_length=40)
+    phase: str = Field(default="unknown", max_length=24)
+    payload_keys: List[str] = Field(default_factory=list, max_length=40)
+
+
+@app.post("/signal-trace/event")
+def signal_trace_event(payload: SignalEventRequest):
+    forbidden = ("authorization", "cookie", "token", "password", "session", "secret")
+    keys = [key.strip().lower() for key in payload.payload_keys]
+    if any(any(word in key for word in forbidden) for key in keys):
+        raise HTTPException(status_code=400, detail="Sensitive payload keys are not accepted.")
+    host = payload.source_host.strip().lower()
+    if not host or any(ch in host for ch in "/:@?#"):
+        raise HTTPException(status_code=422, detail="source_host must be a hostname only.")
+    try:
+        return record_signal_event(payload.event_type, host, payload.round_id.strip(),
+                                   payload.observed_at, payload.phase, keys)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/signal-trace/status")
+def get_signal_trace_status(limit: int = 100):
+    if not 1 <= limit <= 500:
+        raise HTTPException(status_code=422, detail="limit must be 1..500")
+    return signal_trace_status(limit)
