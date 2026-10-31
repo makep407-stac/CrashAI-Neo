@@ -209,16 +209,30 @@ def login(payload: LoginRequest):
 
 
 def responsive_historical_estimate(rounds):
-    """Robust recent-history descriptor; no assertion of next-round predictability."""
+    """Choose recent-history model only when walk-forward testing beats a robust baseline."""
     if not rounds:
         return 2.0
-    import math
-    # Log-space dampens extreme crash tails; recent observations have more weight.
-    recent = rounds[-min(12, len(rounds)):]
-    weights = [0.82 ** (len(recent) - 1 - i) for i in range(len(recent))]
-    log_average = sum(w * math.log(max(1.0, x)) for w, x in zip(weights, recent)) / sum(weights)
-    robust = median(rounds[-min(50, len(rounds)):])
-    return round(0.65 * math.exp(log_average) + 0.35 * robust, 2)
+    def baseline(history):
+        return median(history[-min(100, len(history)):])
+    def candidate(history):
+        # Log-space short window is robust to rare extreme outcomes.
+        import math
+        recent = history[-min(12, len(history)):]
+        return math.exp(sum(math.log(max(1.0, x)) for x in recent) / len(recent))
+    if len(rounds) < 40:
+        return round(baseline(rounds), 2)
+    start = max(20, len(rounds) - 60)
+    baseline_error = 0.0
+    candidate_error = 0.0
+    for i in range(start, len(rounds)):
+        actual = min(rounds[i], 20.0)
+        baseline_error += abs(min(baseline(rounds[:i]), 20.0) - actual)
+        candidate_error += abs(min(candidate(rounds[:i]), 20.0) - actual)
+    # Require a meaningful improvement before using a responsive estimator.
+    if candidate_error < baseline_error * 0.95:
+        return round(candidate(rounds), 2)
+    return round(baseline(rounds), 2)
+
 
 @app.get("/next-estimate")
 def next_estimate(limit: int = 200):
@@ -246,7 +260,7 @@ def next_estimate(limit: int = 200):
             "historical_range_p25_p75": [percentile(0.25), percentile(0.75)],
             "historical_threshold_percentages": thresholds,
             "recent_20_median": round(median(rounds[-20:]), 2),
-            "sample_count": len(rounds), "method": "recent_weighted_log_average_and_median",
+            "sample_count": len(rounds), "method": "walk_forward_selected_robust_estimator",
             "validated_next_round_prediction": False,
             "note": "Historical point estimate only; no demonstrated predictive power."}
 
