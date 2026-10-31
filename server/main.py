@@ -284,6 +284,37 @@ def get_forecast_status():
     return forecast_status()
 
 
+@app.get("/pre-result-audit")
+def pre_result_audit():
+    """Evidence gate: do not mistake estimates or late-arriving results for advance knowledge."""
+    import sqlite3
+    from forecast_tracking import _DB_PATH
+    from datetime import datetime
+    with sqlite3.connect(_DB_PATH) as db:
+        rows = db.execute(
+            "SELECT estimate, actual, created_at, evaluated_at "
+            "FROM forecasts WHERE actual IS NOT NULL ORDER BY created_at DESC LIMIT 500"
+        ).fetchall()
+    eligible = []
+    for estimate, actual, created, evaluated in rows:
+        try:
+            lead = (datetime.fromisoformat(evaluated) - datetime.fromisoformat(created)).total_seconds()
+        except (ValueError, TypeError):
+            continue
+        if lead > 0:
+            eligible.append((float(estimate), float(actual), lead))
+    exact = sum(abs(pred - actual) < 0.005 for pred, actual, _ in eligible)
+    return {
+        "status": "not_verified",
+        "evaluated_pairs": len(eligible),
+        "exact_matches": exact,
+        "exact_match_rate_percent": round(100 * exact / len(eligible), 2) if eligible else None,
+        "median_record_to_evaluation_seconds": round(median([lead for _, _, lead in eligible]), 2) if eligible else None,
+        "advance_result_proven": False,
+        "warning": "Evaluation time is not actual crash time. Existing forecasts are generated after the first visible multiplier, so timestamps do not establish pre-round knowledge. A trusted server-side round timeline and independently captured outcome are required.",
+    }
+
+
 @app.get("/pattern-diagnostics")
 def pattern_diagnostics(limit: int = 500):
     return inspect_structure([row["multiplier"] for row in recent_rounds(limit)])
