@@ -30,6 +30,16 @@ public class FloatingWindowService extends Service {
     private TextView floatingCircle;
     private TextView recordedLabel;
     private TextView diagnosticLabel;
+    private TextView intelligenceLabel;
+    private final Handler intelligenceHandler = new Handler(Looper.getMainLooper());
+    private final Runnable intelligenceRefresh = new Runnable() {
+        @Override public void run() {
+            IntelligenceClient.fetch(result -> {
+                if (intelligenceLabel != null) intelligenceLabel.setText(result);
+            });
+            intelligenceHandler.postDelayed(this, 60000);
+        }
+    };
     private LinearLayout overlayRoot;
     private final Handler displayHandler = new Handler(Looper.getMainLooper());
     private final Runnable refresh = new Runnable() {
@@ -81,6 +91,13 @@ public class FloatingWindowService extends Service {
         diagnosticLabel.setGravity(Gravity.CENTER);
         diagnosticLabel.setMaxLines(2);
         overlayRoot.addView(diagnosticLabel, new LinearLayout.LayoutParams(dp(210), dp(42)));
+        intelligenceLabel = new TextView(this);
+        intelligenceLabel.setText("NEO AI: جارٍ تحميل التحليل...");
+        intelligenceLabel.setTextColor(Color.rgb(255, 190, 90));
+        intelligenceLabel.setTextSize(10);
+        intelligenceLabel.setGravity(Gravity.CENTER);
+        intelligenceLabel.setMaxLines(2);
+        overlayRoot.addView(intelligenceLabel, new LinearLayout.LayoutParams(dp(210), dp(34)));
         floatingCircle = new TextView(this);
         floatingCircle.setText(AnalysisState.current(this));
         floatingCircle.setTextColor(Color.WHITE);
@@ -100,7 +117,7 @@ public class FloatingWindowService extends Service {
 
         params = new WindowManager.LayoutParams(
                 dp(210),
-                dp(76) + dp(circleSize),
+                dp(110) + dp(circleSize),
                 overlayType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -128,7 +145,7 @@ public class FloatingWindowService extends Service {
                         floatingCircle.getLayoutParams().width = dp(circleSize);
                         floatingCircle.getLayoutParams().height = dp(circleSize);
                         overlayRoot.requestLayout();
-                        params.height = dp(76 + circleSize);
+                        params.height = dp(110 + circleSize);
 
                         updateCirclePosition();
                         return true;
@@ -171,6 +188,7 @@ public class FloatingWindowService extends Service {
         try {
             windowManager.addView(overlayRoot, params);
             displayHandler.post(refresh);
+            intelligenceHandler.post(intelligenceRefresh);
         } catch (Exception e) {
             stopSelf();
         }
@@ -254,6 +272,7 @@ public class FloatingWindowService extends Service {
     @Override
     public void onDestroy() {
         displayHandler.removeCallbacks(refresh);
+        intelligenceHandler.removeCallbacks(intelligenceRefresh);
         if (floatingCircle != null && windowManager != null) {
             try {
                 if (floatingCircle.isAttachedToWindow()) {
