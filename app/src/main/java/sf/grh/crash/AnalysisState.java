@@ -8,7 +8,7 @@ public final class AnalysisState {
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("status",status).apply();
  }
  public static void updateMultiplier(Context c,double value,int count) {
-  if(Double.isNaN(value)||Double.isInfinite(value)||value<1||count<20)return;
+  if(Double.isNaN(value)||Double.isInfinite(value)||value<1)return;
   String number=String.format(java.util.Locale.US,"%.2f",value);
   c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit().putString("display",number).putInt("sample_count",count).apply();
  }
@@ -30,7 +30,7 @@ public final class AnalysisState {
   String value=p.getString("display","");
   int local = 0;
   try (RoundJournal journal = new RoundJournal(c)) { local = journal.count(); } catch (Exception ignored) {}
-  return value.isEmpty() ? local+"/20" : value+"x";
+  return value.isEmpty() ? "2.00x*" : value+"x";
  }
  public static String status(Context c) {
   SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
