@@ -210,12 +210,14 @@ def login(payload: LoginRequest):
 @app.get("/next-estimate")
 def next_estimate(limit: int = 200):
     """Descriptive robust point estimate; NOT a validated prediction of the next Crash outcome."""
-    if not 5 <= limit <= 500:
-        raise HTTPException(status_code=422, detail="limit must be 30..500")
+    if not 1 <= limit <= 500:
+        raise HTTPException(status_code=422, detail="limit must be 1..500")
     rounds = [row["multiplier"] for row in recent_rounds(limit)]
-    if len(rounds) < 20:
-        return {"available": False, "sample_count": len(rounds), "required_rounds": 20,
-                "reason": "Calibration mode: at least 20 confirmed completed rounds are required before showing estimates."}
+    if not rounds:
+        return {"available": True, "estimate_multiplier": 2.0, "sample_count": 0,
+                "required_rounds": 0, "method": "uncalibrated_reference_2x",
+                "validated_next_round_prediction": False,
+                "note": "2x is an uncalibrated reference, not a prediction; no recorded rounds yet."}
     # Median is resistant to the extremely long upper tail of Crash multipliers.
     # Avoid an apparent high-precision prediction: two decimals are display precision only.
     baseline = median(rounds)
@@ -244,9 +246,8 @@ class PrepareRoundRequest(BaseModel):
 def prepare_round(payload: PrepareRoundRequest):
     """Store one pre-round historical estimate under the upcoming round ID."""
     rounds = [row["multiplier"] for row in recent_rounds(200)]
-    if len(rounds) < 20:
-        return {"available": False, "sample_count": len(rounds), "required_rounds": 20,
-                "reason": "Calibration mode: record 20 confirmed completed rounds before showing an estimate."}
+    if not rounds:
+        return prepare_forecast(payload.round_id, 2.0, 0)
     estimate = round(0.75 * median(rounds) + 0.25 * median(rounds[-min(50, len(rounds)):]), 2)
     return prepare_forecast(payload.round_id, estimate, len(rounds))
 
