@@ -222,6 +222,23 @@ public class ScreenCaptureService extends Service {
                 }
             }
         }
+        // A crash result may be displayed outside the flying chart, especially at 1.00x.
+        // Only accept a standalone multiplier from a result-labelled line.
+        if (finished) {
+            for (com.google.mlkit.vision.text.Text.TextBlock block : textResult.getTextBlocks()) {
+                for (com.google.mlkit.vision.text.Text.Line line : block.getLines()) {
+                    String raw = line.getText().toLowerCase(java.util.Locale.ROOT);
+                    if (!(raw.contains("flew away") || raw.contains("crashed") ||
+                            raw.contains("طار") || raw.contains("انفجر"))) continue;
+                    Matcher finalMatch = MULTIPLIER.matcher(raw);
+                    if (finalMatch.find()) {
+                        found = finalMatch.group(1).replace(',', '.');
+                        break;
+                    }
+                }
+                if (found != null) break;
+            }
+        }
         if (found != null) AnalysisState.diagnostic(this, "multipliers");
         long now = SystemClock.elapsedRealtime();
         if (now - lastDiagnosticAt > 6000) {
@@ -255,6 +272,9 @@ public class ScreenCaptureService extends Service {
             return;
         }
         if (found == null) {
+            if (finished && currentRoundId.isEmpty()) {
+                AnalysisState.update(this, "انتهت جولة سريعة دون مضاعف مؤكد — لم تُختلق نتيجة");
+            }
             if (finished && "flying".equals(phase) && !lastLiveReading.isEmpty()
                     && !currentRoundId.isEmpty() && now - lastLiveAt <= 5000L) {
                 String completed = lastLiveReading;
