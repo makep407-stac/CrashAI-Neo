@@ -251,20 +251,13 @@ public class ScreenCaptureService extends Service {
             AnalysisState.update(this, found != null ? "قراءة المضاعف: " + found + "x" :
                     (countdown ? "تم اكتشاف شاشة انتظار الجولة" : "التقاط الشاشة يعمل — لم يُكتشف مضاعف بعد"));
         }
-        // Create the upcoming round ID and store its estimate during the betting countdown,
-        // before the first in-flight multiplier becomes visible.
-        if (countdown && !"countdown".equals(phase) && currentRoundId.isEmpty()) {
-            currentRoundId = "screen-" + System.currentTimeMillis();
-            sendSignalTrace("countdown_seen", "countdown", currentRoundId);
-            final String upcomingRoundId = currentRoundId;
-            new Thread(() -> requestForecast(upcomingRoundId), "crashai-pre-round-forecast").start();
-        }
         // The next betting phase closes the previous round exactly once.
         if (countdown && found == null) consecutiveCountdownFrames++;
         else consecutiveCountdownFrames = 0;
         if (countdown && found == null && consecutiveCountdownFrames >= 2) {
             // The chart's countdown follows the plane disappearing. Save the last
             // recently observed multiplier once; it is an observed approximation.
+            // Close the previous round under its own ID BEFORE allocating the next ID.
             if ("flying".equals(phase) && !lastLiveReading.isEmpty()
                     && !currentRoundId.isEmpty() && now - lastLiveAt <= 5000L) {
                 String completed = lastLiveReading;
@@ -272,11 +265,14 @@ public class ScreenCaptureService extends Service {
                 saveAndUpload(completed, completedId);
                 AnalysisState.update(this, "اختفت الطائرة — حفظ آخر قراءة: " + completed + "x");
             }
+            currentRoundId = "screen-" + System.currentTimeMillis();
             phase = "countdown";
+            sendSignalTrace("countdown_seen", "countdown", currentRoundId);
+            final String upcomingRoundId = currentRoundId;
+            new Thread(() -> requestForecast(upcomingRoundId), "crashai-pre-round-forecast").start();
             multiplierMissingSince = 0;
             liveFramesSeen = 0;
             consecutiveCountdownFrames = 0;
-            // Keep the ID: this is the upcoming round whose forecast was stored above.
             lastLiveReading = "";
             previousStableValue = 0;
             previousReading = "";
@@ -423,6 +419,9 @@ public class ScreenCaptureService extends Service {
     }
 
     private void fetchEstimateForDisplay() {
+        // A round owns exactly one estimate from countdown until its result is saved.
+        // Background polling must never replace that locked number.
+        if (!currentRoundId.isEmpty()) return;
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL("https://crashai-neo-api.onrender.com/next-estimate?limit=200").openConnection();
@@ -442,8 +441,11 @@ public class ScreenCaptureService extends Service {
             int count = json.optInt("sample_count", 0);
             AnalysisState.progress(this, count);
             if (json.optBoolean("available", false)) {
-                AnalysisState.updateMultiplier(this, json.getDouble("estimate_multiplier"), count);
-                AnalysisState.update(this, "تم جلب التقدير الإحصائي من الخادم");
+                // A countdown may have started while this request was in flight.
+                if (currentRoundId.isEmpty()) {
+                    AnalysisState.updateMultiplier(this, json.getDouble("estimate_multiplier"), count);
+                    AnalysisState.update(this, "تم جلب التقدير الإحصائي من الخادم");
+                }
                 fetchForecastEvaluationStatus();
             } else {
                 AnalysisState.update(this, "الجولات المتاحة: " + count + " — بانتظار بيانات كافية لتحسين الإحصاء");
@@ -501,9 +503,10 @@ public class ScreenCaptureService extends Service {
                     while ((line = in.readLine()) != null) json.append(line);
                 }
                 JSONObject parsed = new JSONObject(json.toString());
-                if (parsed.optBoolean("available", false) && roundId.equals(currentRoundId)) {
+                if (parsed.optBoolean("available", false) && roundId.equals(currentRoundId)
+                        && "countdown".equals(phase)) {
                     AnalysisState.updateMultiplier(this, parsed.getDouble("estimate_multiplier"), parsed.optInt("sample_count", 0));
-                    AnalysisState.update(this, "تم تسجيل تقدير مسبق للجولة للمقارنة لاحقًا");
+                    AnalysisState.update(this, "تم تثبيت رقم واحد لهذه الجولة — تقدير تاريخي قيد التقييم");
                 } else if (!parsed.optBoolean("available", false)) {
                     AnalysisState.progress(this, parsed.optInt("sample_count", 0));
                     AnalysisState.update(this, "الجولات المتاحة: " + parsed.optInt("sample_count", 0));
