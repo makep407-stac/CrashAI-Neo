@@ -246,6 +246,13 @@ public class ScreenCaptureService extends Service {
             AnalysisState.update(this, found != null ? "قراءة المضاعف: " + found + "x" :
                     (countdown ? "تم اكتشاف شاشة انتظار الجولة" : "التقاط الشاشة يعمل — لم يُكتشف مضاعف بعد"));
         }
+        // Create the upcoming round ID and store its estimate during the betting countdown,
+        // before the first in-flight multiplier becomes visible.
+        if (countdown && !"countdown".equals(phase) && currentRoundId.isEmpty()) {
+            currentRoundId = "screen-" + System.currentTimeMillis();
+            final String upcomingRoundId = currentRoundId;
+            new Thread(() -> requestForecast(upcomingRoundId), "crashai-pre-round-forecast").start();
+        }
         // The next betting phase closes the previous round exactly once.
         if (countdown && found == null) consecutiveCountdownFrames++;
         else consecutiveCountdownFrames = 0;
@@ -263,7 +270,7 @@ public class ScreenCaptureService extends Service {
             multiplierMissingSince = 0;
             liveFramesSeen = 0;
             consecutiveCountdownFrames = 0;
-            currentRoundId = "";
+            // Keep the ID: this is the upcoming round whose forecast was stored above.
             lastLiveReading = "";
             previousStableValue = 0;
             previousReading = "";
@@ -309,10 +316,8 @@ public class ScreenCaptureService extends Service {
         double candidate;
         try { candidate = Double.parseDouble(found); } catch (NumberFormatException ex) { return; }
         if (candidate < 1 || candidate > 100000) return;
-        if ("countdown".equals(phase) || "finished".equals(phase) || currentRoundId.isEmpty()) {
+        if ("finished".equals(phase) || currentRoundId.isEmpty()) {
             currentRoundId = "screen-" + System.currentTimeMillis();
-            final String forecastRoundId = currentRoundId;
-            new Thread(() -> requestForecast(forecastRoundId), "crashai-pre-round-forecast").start();
             previousStableValue = 0;
             lastLiveReading = "";
             liveFramesSeen = 0;
