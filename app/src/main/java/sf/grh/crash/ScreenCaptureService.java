@@ -252,7 +252,7 @@ public class ScreenCaptureService extends Service {
         if (found == null) {
             if ("flying".equals(phase) && !lastLiveReading.isEmpty()) {
                 if (multiplierMissingSince == 0) multiplierMissingSince = now;
-                if (liveFramesSeen >= 3 && now - multiplierMissingSince >= 1800L
+                if (liveFramesSeen >= 2 && now - multiplierMissingSince >= 900L
                         && now - lastLiveAt <= 8000L && !currentRoundId.isEmpty()) {
                     String completed = lastLiveReading;
                     String completedId = currentRoundId;
