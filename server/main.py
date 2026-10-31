@@ -207,6 +207,19 @@ def login(payload: LoginRequest):
             "message": "Application access granted; no 1xBet account linkage."}
 
 
+
+def responsive_historical_estimate(rounds):
+    """Robust recent-history descriptor; no assertion of next-round predictability."""
+    if not rounds:
+        return 2.0
+    import math
+    # Log-space dampens extreme crash tails; recent observations have more weight.
+    recent = rounds[-min(12, len(rounds)):]
+    weights = [0.82 ** (len(recent) - 1 - i) for i in range(len(recent))]
+    log_average = sum(w * math.log(max(1.0, x)) for w, x in zip(weights, recent)) / sum(weights)
+    robust = median(rounds[-min(50, len(rounds)):])
+    return round(0.65 * math.exp(log_average) + 0.35 * robust, 2)
+
 @app.get("/next-estimate")
 def next_estimate(limit: int = 200):
     """Descriptive robust point estimate; NOT a validated prediction of the next Crash outcome."""
@@ -222,7 +235,7 @@ def next_estimate(limit: int = 200):
     # Avoid an apparent high-precision prediction: two decimals are display precision only.
     baseline = median(rounds)
     recent = median(rounds[-min(50, len(rounds)):])
-    estimate = round(0.75 * baseline + 0.25 * recent, 2)
+    estimate = responsive_historical_estimate(rounds)
     ordered = sorted(rounds)
     def percentile(q):
         index = (len(ordered) - 1) * q
@@ -233,7 +246,7 @@ def next_estimate(limit: int = 200):
             "historical_range_p25_p75": [percentile(0.25), percentile(0.75)],
             "historical_threshold_percentages": thresholds,
             "recent_20_median": round(median(rounds[-20:]), 2),
-            "sample_count": len(rounds), "method": "robust_historical_median_blend",
+            "sample_count": len(rounds), "method": "recent_weighted_log_average_and_median",
             "validated_next_round_prediction": False,
             "note": "Historical point estimate only; no demonstrated predictive power."}
 
@@ -248,7 +261,7 @@ def prepare_round(payload: PrepareRoundRequest):
     rounds = [row["multiplier"] for row in recent_rounds(200)]
     if not rounds:
         return prepare_forecast(payload.round_id, 2.0, 0)
-    estimate = round(0.75 * median(rounds) + 0.25 * median(rounds[-min(50, len(rounds)):]), 2)
+    estimate = responsive_historical_estimate(rounds)
     return prepare_forecast(payload.round_id, estimate, len(rounds))
 
 
