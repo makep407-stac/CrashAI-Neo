@@ -15,6 +15,7 @@ from forecast_tracking import prepare_forecast, record_outcome, forecast_status
 from screen_reading import validate_completed_round
 from pattern_diagnostics import inspect_structure
 from neural_engine import select_single_estimate
+from intelligence_engine import analyze_intelligence
 from signal_trace import record_signal_event, signal_trace_status
 from pydantic import BaseModel, Field, field_validator
 
@@ -158,6 +159,21 @@ def learn_round(payload: CompletedRound):
 @app.get("/learning-status")
 def learning_status():
     return learner.status()
+
+
+@app.get("/intelligence")
+def intelligence(limit: int = 500):
+    """Full adaptive ensemble report, evaluated strictly in chronological order."""
+    if not 10 <= limit <= 500:
+        raise HTTPException(status_code=422, detail="limit must be 10..500")
+    rounds = [row["multiplier"] for row in recent_rounds(limit)]
+    return analyze_intelligence(rounds)
+
+
+@app.post("/intelligence/analyze")
+def intelligence_analyze(payload: RoundsRequest):
+    """Analyze a supplied chronological sequence without storing or training on it."""
+    return analyze_intelligence(payload.rounds)
 
 
 @app.post("/advanced-analysis")
