@@ -239,7 +239,11 @@ public class ScreenCaptureService extends Service {
                 if (found != null) break;
             }
         }
-        if (found != null) AnalysisState.diagnostic(this, "multipliers");
+        if (found != null) {
+            AnalysisState.diagnostic(this, "multipliers");
+            sendSignalTrace(finished ? "result_label_seen" : "multiplier_visible",
+                    finished ? "finished" : "flying", currentRoundId);
+        }
         long now = SystemClock.elapsedRealtime();
         if (now - lastDiagnosticAt > 6000) {
             lastDiagnosticAt = now;
@@ -250,6 +254,7 @@ public class ScreenCaptureService extends Service {
         // before the first in-flight multiplier becomes visible.
         if (countdown && !"countdown".equals(phase) && currentRoundId.isEmpty()) {
             currentRoundId = "screen-" + System.currentTimeMillis();
+            sendSignalTrace("countdown_seen", "countdown", currentRoundId);
             final String upcomingRoundId = currentRoundId;
             new Thread(() -> requestForecast(upcomingRoundId), "crashai-pre-round-forecast").start();
         }
@@ -378,6 +383,37 @@ public class ScreenCaptureService extends Service {
             }
         }
         return false;
+    }
+
+    // Privacy-safe screen event telemetry: sends event metadata only, never screenshots or credentials.
+    private void sendSignalTrace(String eventType, String eventPhase, String roundId) {
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                JSONObject body = new JSONObject();
+                body.put("event_type", eventType);
+                body.put("source_host", "screen-ocr");
+                body.put("round_id", roundId == null ? "" : roundId);
+                body.put("observed_at", java.time.Instant.now().toString());
+                body.put("phase", eventPhase == null ? "unknown" : eventPhase);
+                body.put("payload_keys", new JSONArray());
+                connection = (HttpURLConnection) new URL("https://crashai-neo-api.onrender.com/signal-trace/event").openConnection();
+                connection.setRequestMethod("POST");
+                connection.setDoOutput(true);
+                connection.setConnectTimeout(5000);
+                connection.setReadTimeout(5000);
+                connection.setRequestProperty("Content-Type", "application/json");
+                try (OutputStream out = connection.getOutputStream()) {
+                    out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                int code = connection.getResponseCode();
+                if (code == 200) AnalysisState.diagnostic(this, "trace_events");
+            } catch (Exception ignored) {
+                // Trace is auxiliary and must never interrupt screen reading.
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }, "crashai-signal-trace").start();
     }
 
     private void fetchEstimateForDisplay() {
