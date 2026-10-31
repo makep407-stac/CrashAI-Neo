@@ -63,6 +63,7 @@ public class ScreenCaptureService extends Service {
     private long lastLiveAt;
     private long multiplierMissingSince;
     private int liveFramesSeen;
+    private int consecutiveCountdownFrames;
     private double previousStableValue = 0;
     private int stableFrames = 0;
     private long lastRoundSentAt;
@@ -228,7 +229,9 @@ public class ScreenCaptureService extends Service {
                     (countdown ? "تم اكتشاف شاشة انتظار الجولة" : "التقاط الشاشة يعمل — لم يُكتشف مضاعف بعد"));
         }
         // The next betting phase closes the previous round exactly once.
-        if (countdown && found == null) {
+        if (countdown && found == null) consecutiveCountdownFrames++;
+        else consecutiveCountdownFrames = 0;
+        if (countdown && found == null && consecutiveCountdownFrames >= 2) {
             // The chart's countdown follows the plane disappearing. Save the last
             // recently observed multiplier once; it is an observed approximation.
             if ("flying".equals(phase) && !lastLiveReading.isEmpty()
@@ -241,6 +244,7 @@ public class ScreenCaptureService extends Service {
             phase = "countdown";
             multiplierMissingSince = 0;
             liveFramesSeen = 0;
+            consecutiveCountdownFrames = 0;
             currentRoundId = "";
             lastLiveReading = "";
             previousStableValue = 0;
@@ -257,6 +261,7 @@ public class ScreenCaptureService extends Service {
                     String completed = lastLiveReading;
                     String completedId = currentRoundId;
                     phase = "countdown";
+                    consecutiveCountdownFrames = 0;
                     currentRoundId = "";
                     lastLiveReading = "";
                     liveFramesSeen = 0;
