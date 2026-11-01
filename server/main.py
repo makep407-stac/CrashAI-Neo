@@ -6,7 +6,7 @@ from statistics import mean, median, pstdev
 from time import perf_counter
 from typing import List
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from reverse_analysis import inspect_rounds
 from online_learning import learner
 from advanced_statistics import analyze_three_ways
@@ -17,6 +17,7 @@ from pattern_diagnostics import inspect_structure
 from neural_engine import select_single_estimate
 from intelligence_engine import analyze_intelligence
 from signal_trace import record_signal_event, signal_trace_status
+from zakaria_bridge import ImportBatch, import_completed_rounds
 from pydantic import BaseModel, Field, field_validator
 
 app = FastAPI(title="CrashAI Neo API", version="0.8.0")
@@ -370,3 +371,12 @@ def get_signal_trace_status(limit: int = 100):
     if not 1 <= limit <= 500:
         raise HTTPException(status_code=422, detail="limit must be 1..500")
     return signal_trace_status(limit)
+
+
+@app.post("/external-feed/import")
+def external_feed_import(
+    payload: ImportBatch,
+    x_crashai_ingest_key: str | None = Header(default=None),
+):
+    """Accept normalized completed-round data from an independently authorized collector."""
+    return import_completed_rounds(payload, x_crashai_ingest_key)
