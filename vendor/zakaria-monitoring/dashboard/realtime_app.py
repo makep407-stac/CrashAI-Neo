@@ -11,9 +11,6 @@ import time
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import yaml
-import re
-from pathlib import Path
 
 # Configuration
 st.set_page_config(
@@ -45,13 +42,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def get_db_connection():
-    """Connexion PostgreSQL"""
+    """Connect using explicit environment configuration; never use a default password."""
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url:
+        return psycopg2.connect(database_url)
+    required = ("DATABASE_HOST", "DATABASE_PORT", "DATABASE_NAME", "DATABASE_USER", "DATABASE_PASSWORD")
+    missing = [name for name in required if not os.getenv(name)]
+    if missing:
+        raise RuntimeError("Missing database environment configuration: " + ", ".join(missing))
     return psycopg2.connect(
-        host=os.getenv('DATABASE_HOST', 'localhost'),
-        port=os.getenv('DATABASE_PORT', '5432'),
-        database=os.getenv('DATABASE_NAME', 'crash_db'),
-        user=os.getenv('DATABASE_USER', 'crash_user'),
-        password=os.getenv('DATABASE_PASSWORD', 'crash_password_2025')
+        host=os.environ["DATABASE_HOST"],
+        port=os.environ["DATABASE_PORT"],
+        database=os.environ["DATABASE_NAME"],
+        user=os.environ["DATABASE_USER"],
+        password=os.environ["DATABASE_PASSWORD"],
     )
 
 def get_recent_crashes(limit=100):
@@ -122,113 +126,15 @@ def get_last_crash():
 # Header
 st.markdown('<h1 class="main-header">🎰 1xBet Crash - Moniteur Temps Réel</h1>', unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar — display controls only; no token or session handling.
 with st.sidebar:
     st.header("⚙️ Configuration")
-    
     auto_refresh = st.toggle("🔄 Auto-refresh", value=True)
     refresh_interval = st.slider("Intervalle (secondes)", 1, 10, 3)
-    
     st.divider()
-    
     st.header("📊 Période d'analyse")
-    time_range = st.selectbox(
-        "Dernières heures",
-        [1, 6, 12, 24, 48],
-        index=3
-    )
-    
-    display_limit = st.selectbox(
-        "Crashs à afficher",
-        [50, 100, 200, 500],
-        index=1
-    )
-    
-    st.divider()
-    
-    st.header("🔑 Gestion du Token")
-    
-    with st.expander("🔄 Mettre à jour le token", expanded=False):
-        st.markdown("""
-        **Instructions:**
-        1. Ouvrez DevTools (F12) sur 1xBet Crash
-        2. Network > WS > Cliquez sur 'crash?ref='
-        3. Headers > Copiez 'Request URL'
-        4. Collez ci-dessous et cliquez Mettre à jour
-        """)
-        
-        ws_url = st.text_input(
-            "URL WebSocket complète",
-            placeholder="wss://ma-1xbet.com/games-frame/sockets/crash?ref=1&...&access_token=...",
-            key="ws_url_input"
-        )
-        
-        if st.button("🔄 Mettre à jour le token", type="primary"):
-            if ws_url and 'access_token=' in ws_url:
-                match = re.search(r'access_token=([^&\s]+)', ws_url)
-                if match:
-                    new_token = match.group(1)
-                    
-                    try:
-                        # Mettre à jour config.yaml
-                        config_path = Path(__file__).parent.parent / "config" / "config.yaml"
-                        
-                        with open(config_path, 'r', encoding='utf-8') as f:
-                            config = yaml.safe_load(f)
-                        
-                        config['authentication']['access_token'] = new_token
-                        
-                        with open(config_path, 'w', encoding='utf-8') as f:
-                            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-                        
-                        st.success("✅ Token mis à jour avec succès!")
-                        st.info("🔄 Redémarrez le scraper: python run_scraper.py")
-                        
-                        # Afficher les infos du token
-                        try:
-                            import jwt
-                            decoded = jwt.decode(new_token, options={"verify_signature": False})
-                            exp = decoded.get('exp')
-                            if exp:
-                                from datetime import datetime
-                                exp_time = datetime.fromtimestamp(exp)
-                                st.info(f"⏰ Expire le: {exp_time.strftime('%Y-%m-%d %H:%M:%S')}")
-                        except:
-                            pass
-                        
-                    except Exception as e:
-                        st.error(f"❌ Erreur: {e}")
-                else:
-                    st.error("❌ Token non trouvé dans l'URL")
-            else:
-                st.warning("⚠️ Veuillez coller une URL WebSocket valide")
-    
-    # Vérifier l'état du token actuel
-    try:
-        import jwt
-        
-        config_path = Path(__file__).parent.parent / "config" / "config.yaml"
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-        
-        current_token = config['authentication']['access_token']
-        decoded = jwt.decode(current_token, options={"verify_signature": False})
-        exp = decoded.get('exp')
-        
-        if exp:
-            from datetime import datetime
-            exp_time = datetime.fromtimestamp(exp)
-            now = datetime.now()
-            remaining = (exp_time - now).total_seconds() / 3600
-            
-            if remaining < 0:
-                st.error("🔴 Token expiré!")
-            elif remaining < 1:
-                st.warning(f"⚠️ Expire dans {int(remaining * 60)}min")
-            else:
-                st.success(f"✅ Valide {int(remaining)}h")
-    except:
-        pass
+    time_range = st.selectbox("Dernières heures", [1, 6, 12, 24, 48], index=3)
+    display_limit = st.selectbox("Crashs à afficher", [50, 100, 200, 500], index=1)
 
 # Récupérer les données
 last_crash = None
