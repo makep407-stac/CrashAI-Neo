@@ -1,34 +1,55 @@
-# Zakaria Crash Monitoring — reference snapshot
+# Zakaria Crash Monitoring — adapted collector
 
 Source project: https://github.com/Zakaria-laktati/crash-1xbet-monitoring
 
-Original project license: MIT; attribution and license notice are retained in this folder.
+The source project's MIT license notice is retained in this folder. Review the
+upstream attribution before redistribution.
 
-This directory is reserved for selected dashboard, database, logging, and dependency files adapted from the source project. Credential extraction utilities, browser-session capture instructions, and hard-coded credentials are excluded.
+## Live collector → PostgreSQL → CrashAI Neo
 
-This snapshot is not a live collector and does not establish a connection to any betting platform. Integration with CrashAI Neo's authenticated completed-round import endpoint and tests remain pending.
+`run_scraper.py` listens for completed `OnCrash` events and stores their
+round ID, final multiplier, and timestamp in the `crash_games` PostgreSQL
+table. It reads all account/session credentials from process environment
+variables; no credential values belong in this repository, dashboard, APK,
+or chat.
 
-## CrashAI Neo integration
+Required collector environment:
+- `DATABASE_URL`: PostgreSQL URL for the monitoring database.
+- `ZAKARIA_USER_TOKEN`
+- `ZAKARIA_SESSION`
+- `ZAKARIA_ACCESS_TOKEN`
+- `ZAKARIA_ACCOUNT_ID`
 
-The relay in `relay_to_crashai.py` reads the latest completed rows from the
-`crash_games` PostgreSQL table and submits them to CrashAI Neo's
-`POST /external-feed/import` endpoint. The API deduplicates rows by round ID.
+Optional WebSocket parameters are documented in `.env.example`. The
+`.env.example` file contains blanks only. Keep any populated local env file
+private and untracked.
 
-Configure these variables in the relay process environment (never commit values):
-- `DATABASE_URL`: PostgreSQL connection URL for the monitoring database.
-- `CRASHAI_API_URL`: CrashAI Neo API base URL.
-- `CRASHAI_INGEST_KEY`: same secret as the API's server-side setting.
+Install dependencies from this directory:
+```sh
+python -m pip install -r requirements.txt
+```
+
+Initialize the monitoring database with `database/init.sql` using a PostgreSQL
+database/user that you control, then start the collector in an environment
+where the required variables are set:
+```sh
+python run_scraper.py
+```
+
+In a separate process, configure the relay:
+- `DATABASE_URL`: same monitoring database.
+- `CRASHAI_API_URL`: `https://crashai-neo-api.onrender.com`
+- `CRASHAI_INGEST_KEY`: the server-side ingestion secret already configured
+  for CrashAI Neo.
 - Optional: `RELAY_INTERVAL_SECONDS` (default 5).
 
-Install the source project's requirements, then run:
+Then run:
 ```sh
 python relay_to_crashai.py
 ```
 
-The relay forwards completed database rows only. It does not start or replace
-the upstream collector. A separate, functioning producer must populate
-`crash_games`. Do not configure credentials in source files or the dashboard.
-The dashboard now contains display controls only and requires explicit database
-environment configuration. No browser token capture is provided.
-
-This repository branch has not been deployed or connected to a live data source.
+The relay forwards completed database rows only to
+`POST /external-feed/import`; it does not forecast future outcomes. The
+collector and relay have not yet been run against a live source or database,
+and this branch has not been deployed. A successful API health response alone
+does not prove that the data path is connected.
