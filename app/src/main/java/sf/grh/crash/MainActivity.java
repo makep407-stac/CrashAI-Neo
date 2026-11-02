@@ -437,6 +437,14 @@ public class MainActivity extends Activity {
             }
         });
 
+        TextView predictorButton = makeLabel("NEO PREDICTOR // تحليل استباقي", 14, Color.WHITE, true);
+        predictorButton.setBackground(makeShape(Color.rgb(24, 45, 82), Color.rgb(65, 145, 220), 1));
+        FrameLayout.LayoutParams predictorParams = new FrameLayout.LayoutParams(dp(250), dp(44));
+        predictorParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        predictorParams.topMargin = dp(68);
+        root.addView(predictorButton, predictorParams);
+        predictorButton.setOnClickListener(v -> fetchNextEstimate(predictorButton));
+
         captureButton.setOnClickListener(v -> requestScreenCapture());
 
         TextView combinedButton = makeLabel("تشغيل NEO // LIVE", 14, Color.WHITE, true);
@@ -469,6 +477,61 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         checkServerHealth();
+    }
+
+    private void fetchNextEstimate(TextView button) {
+        button.setEnabled(false);
+        button.setText("جارٍ تحليل البيانات...");
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            String message;
+            try {
+                URL url = new URL("https://crashai-neo-api.onrender.com/next-estimate?limit=200");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(20000);
+                int code = connection.getResponseCode();
+                if (code != 200) {
+                    message = "تعذر جلب التحليل (HTTP " + code + ").";
+                } else {
+                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(connection.getInputStream(), "UTF-8"))) {
+                        StringBuilder body = new StringBuilder();
+                        String line;
+                        while ((line = reader.readLine()) != null) body.append(line);
+                        JSONObject data = new JSONObject(body.toString());
+                        int samples = data.optInt("sample_count", 0);
+                        if (samples == 0) {
+                            message = "لا توجد جولات محفوظة كافية للتحليل بعد.";
+                        } else {
+                            double estimate = data.optDouble("estimate_multiplier", 0);
+                            org.json.JSONArray range = data.optJSONArray("historical_range_p25_p75");
+                            String rangeText = range != null && range.length() == 2
+                                    ? "\\nالنطاق التاريخي الأوسط: " + range.optDouble(0) + "x – " + range.optDouble(1) + "x"
+                                    : "";
+                            message = "التقدير الإحصائي: " + String.format(java.util.Locale.US, "%.2fx", estimate)
+                                    + rangeText + "\\nعدد الجولات: " + samples
+                                    + "\\n\\nهذا تقدير مبني على البيانات السابقة، وليس نتيجة مؤكدة للجولة القادمة.";
+                        }
+                    }
+                }
+            } catch (Exception error) {
+                message = "تعذر الاتصال بخادم التحليل.";
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+            final String result = message;
+            runOnUiThread(() -> {
+                button.setEnabled(true);
+                button.setText("NEO PREDICTOR // تحليل استباقي");
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                        .setTitle("NEO PREDICTOR")
+                        .setMessage(result)
+                        .setPositiveButton("حسناً", null)
+                        .show();
+            });
+        }, "crashai-predictor").start();
     }
 
     private void logout() {
