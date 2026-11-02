@@ -5,27 +5,25 @@ from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel, Field, field_validator
 
+from collector import router as collector_router
 
 app = FastAPI(
     title="CrashAI Neo API",
-    version="0.2.0"
+    version="0.3.0",
+    description="Historical statistics and authenticated real-time round transport."
 )
+app.include_router(collector_router)
 
 
 class RoundsRequest(BaseModel):
-    rounds: List[float] = Field(
-        min_length=1,
-        max_length=500
-    )
+    rounds: List[float] = Field(min_length=1, max_length=500)
 
     @field_validator("rounds")
     @classmethod
     def validate_rounds(cls, values):
         for value in values:
             if not isfinite(value) or value <= 0:
-                raise ValueError(
-                    "All round multipliers must be finite and positive."
-                )
+                raise ValueError("All round multipliers must be finite and positive.")
         return values
 
 
@@ -34,17 +32,15 @@ def root():
     return {
         "app": "CrashAI Neo API",
         "status": "ok",
+        "version": "0.3.0",
         "prediction_available": False,
-        "message": "Statistical analysis API is running."
+        "features": ["historical_analysis", "authenticated_round_ingestion", "websocket_broadcast"]
     }
 
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "version": "0.2.0"
-    }
+    return {"status": "ok", "version": "0.3.0"}
 
 
 @app.post("/analyze")
@@ -52,13 +48,11 @@ def analyze(payload: RoundsRequest):
     rounds = payload.rounds
     count = len(rounds)
 
-    ordered = sorted(rounds)
-
     def percentage(condition):
         matches = sum(1 for value in rounds if condition(value))
         return round(matches / count * 100, 2)
 
-    result = {
+    return {
         "status": "analysis_only",
         "count": count,
         "mean": round(sum(rounds) / count, 3),
@@ -66,21 +60,12 @@ def analyze(payload: RoundsRequest):
         "min": round(min(rounds), 3),
         "max": round(max(rounds), 3),
         "standard_deviation": round(pstdev(rounds), 3),
-        "percent_at_least_2x": percentage(
-            lambda x: x >= 2
-        ),
-        "percent_at_least_5x": percentage(
-            lambda x: x >= 5
-        ),
-        "percent_at_least_10x": percentage(
-            lambda x: x >= 10
-        ),
+        "percent_at_least_2x": percentage(lambda x: x >= 2),
+        "percent_at_least_5x": percentage(lambda x: x >= 5),
+        "percent_at_least_10x": percentage(lambda x: x >= 10),
         "prediction_available": False,
         "message": (
             "Historical descriptive statistics only. "
-            "These results do not establish a reliable "
-            "prediction of the next round."
+            "These results do not establish a reliable prediction of the next round."
         )
     }
-
-    return result
