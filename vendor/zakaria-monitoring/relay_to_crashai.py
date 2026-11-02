@@ -1,23 +1,12 @@
-"""Relay completed rounds from the Zakaria PostgreSQL store to CrashAI Neo.
-
-Required environment:
-  DATABASE_URL             PostgreSQL connection URL for the monitoring database
-  CRASHAI_API_URL           Base URL, e.g. https://crashai-neo-api.onrender.com
-  CRASHAI_INGEST_KEY        Secret configured on the CrashAI Neo server
-
-This process forwards completed rows only. It does not collect account credentials,
-connect to a betting account, or predict future outcomes.
-"""
+"""Relay only newly completed rounds from PostgreSQL to CrashAI Neo."""
+import logging
 import os
 import time
-import logging
-
 import psycopg2
 import requests
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger("zakaria-relay")
-
 
 def required(name):
     value = os.getenv(name, "").strip()
@@ -25,58 +14,55 @@ def required(name):
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
 
-
-def read_recent(connection, limit=100):
+def read_after(connection, cursor_key, limit=250):
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT game_id, multiplier
-            FROM crash_games
-            WHERE multiplier >= 1
-            ORDER BY timestamp DESC, game_id DESC
-            LIMIT %s
-            """,
-            (limit,),
-        )
-        rows = cursor.fetchall()
-    # API accepts rounds in any order; stable order improves traceability.
-    return [{"round_id": str(game_id), "multiplier": float(multiplier)}
-            for game_id, multiplier in reversed(rows)]
-
+        if cursor_key is None:
+            cursor.execute(
+                """SELECT game_id, multiplier, timestamp
+                   FROM crash_games WHERE multiplier >= 1
+                   ORDER BY timestamp DESC, game_id DESC LIMIT %s""", (limit,))
+            rows = list(reversed(cursor.fetchall()))
+        else:
+            last_ts, last_id = cursor_key
+            cursor.execute(
+                """SELECT game_id, multiplier, timestamp
+                   FROM crash_games
+                   WHERE multiplier >= 1 AND (timestamp, game_id) > (%s, %s)
+                   ORDER BY timestamp ASC, game_id ASC LIMIT %s""",
+                (last_ts, last_id, limit))
+            rows = cursor.fetchall()
+    return rows
 
 def main():
     database_url = required("DATABASE_URL")
-    api_url = required("CRASHAI_API_URL").rstrip("/")
+    endpoint = required("CRASHAI_API_URL").rstrip("/") + "/external-feed/import"
     ingest_key = required("CRASHAI_INGEST_KEY")
     interval = max(2, int(os.getenv("RELAY_INTERVAL_SECONDS", "5")))
-    endpoint = api_url + "/external-feed/import"
-
+    cursor_key = None
     with psycopg2.connect(database_url) as connection:
         while True:
             try:
-                rounds = read_recent(connection)
-                if rounds:
+                rows = read_after(connection, cursor_key)
+                if rows:
+                    batch = [{"round_id": str(gid), "multiplier": float(mult)}
+                             for gid, mult, _ in rows]
                     response = requests.post(
                         endpoint,
-                        json={"source": "zakaria_postgres", "rounds": rounds},
+                        json={"source": "zakaria_postgres", "rounds": batch},
                         headers={"X-CrashAI-Ingest-Key": ingest_key},
-                        timeout=20,
-                    )
+                        timeout=20)
                     response.raise_for_status()
                     result = response.json()
-                    log.info("Relay accepted=%s duplicates=%s stored=%s",
-                             result.get("accepted"), result.get("duplicates"),
-                             result.get("stored_round_count"))
-                else:
-                    log.info("No completed rounds available yet.")
+                    cursor_key = (rows[-1][2], rows[-1][0])
+                    log.info("Forwarded batch=%s accepted=%s duplicates=%s",
+                             len(rows), result.get("accepted"),
+                             result.get("duplicates"))
             except requests.RequestException as exc:
-                # Do not print request headers or secret values.
                 log.warning("CrashAI endpoint request failed: %s", type(exc).__name__)
             except psycopg2.Error as exc:
                 log.warning("PostgreSQL read failed: %s", type(exc).__name__)
                 raise
             time.sleep(interval)
-
 
 if __name__ == "__main__":
     main()
