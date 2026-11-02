@@ -12,6 +12,8 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
+import android.text.InputType;
+import android.widget.ScrollView;
 import android.view.animation.Animation;
 import android.view.animation.ScaleAnimation;
 import android.widget.EditText;
@@ -341,9 +343,116 @@ public class MainActivity extends Activity {
 
         root.addView(center, centerParams);
 
+        TextView connectionButton = makeLabel(
+                "إعداد الاتصال الآمن", 14, Color.WHITE, true
+        );
+        connectionButton.setBackground(makeShape(
+                Color.rgb(10, 24, 42), Color.rgb(20, 100, 180), 1
+        ));
+        FrameLayout.LayoutParams connectionParams =
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT, dp(50)
+                );
+        connectionParams.gravity = Gravity.BOTTOM;
+        connectionParams.leftMargin = dp(28);
+        connectionParams.rightMargin = dp(28);
+        connectionParams.bottomMargin = dp(28);
+        root.addView(connectionButton, connectionParams);
+        connectionButton.setOnClickListener(v -> showConnectionSettings());
+
         setContentView(root);
 
         checkServerHealth();
+    }
+
+    private void showConnectionSettings() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        LinearLayout root = newPage();
+        root.setGravity(Gravity.TOP);
+        scroll.addView(root);
+
+        TextView title = makeLabel("إعداد الاتصال الآمن", 23, BLUE, true);
+        root.addView(title, lp(-1, 64));
+        TextView note = makeLabel(
+                "تُشفّر البيانات على هذا الهاتف فقط. لن تُرسل إلى الخادم تلقائياً.",
+                13, MUTED, false
+        );
+        root.addView(note, lp(-1, 58));
+
+        EditText session = makeSecretInput("SESSION");
+        EditText access = makeSecretInput("ACCESS TOKEN");
+        EditText userHash = makeSecretInput("USER HASH");
+
+        addSecretField(root, "SESSION", session);
+        addSecretField(root, "ACCESS TOKEN", access);
+        addSecretField(root, "USER HASH", userHash);
+
+        TextView status = makeLabel(
+                SessionVault.hasSaved(this) ? "توجد بيانات مشفّرة محفوظة" : "لا توجد بيانات محفوظة",
+                12, MUTED, false
+        );
+        LinearLayout.LayoutParams statusLp = lp(-1, 42);
+        statusLp.topMargin = dp(8);
+        root.addView(status, statusLp);
+
+        TextView save = makeLabel("حفظ مشفّر على الهاتف", 15, Color.WHITE, true);
+        save.setBackground(makeShape(BLUE, BLUE, 1));
+        LinearLayout.LayoutParams saveLp = lp(-1, 52);
+        saveLp.topMargin = dp(10);
+        root.addView(save, saveLp);
+        save.setOnClickListener(v -> {
+            try {
+                SessionVault.save(this,
+                        session.getText().toString(),
+                        access.getText().toString(),
+                        userHash.getText().toString());
+                session.setText("");
+                access.setText("");
+                userHash.setText("");
+                status.setText("تم الحفظ محلياً بالتشفير");
+                Toast.makeText(this, "حُفظت البيانات على هذا الجهاز", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "تعذر التشفير والحفظ", Toast.LENGTH_LONG).show();
+            }
+        });
+
+        TextView clear = makeLabel("مسح البيانات المحفوظة", 14, Color.rgb(255, 120, 120), true);
+        LinearLayout.LayoutParams clearLp = lp(-1, 48);
+        clearLp.topMargin = dp(10);
+        root.addView(clear, clearLp);
+        clear.setOnClickListener(v -> {
+            SessionVault.clear(this);
+            session.setText("");
+            access.setText("");
+            userHash.setText("");
+            status.setText("تم مسح البيانات المحفوظة");
+        });
+
+        TextView back = makeLabel("رجوع", 14, MUTED, true);
+        LinearLayout.LayoutParams backLp = lp(-1, 44);
+        backLp.topMargin = dp(8);
+        root.addView(back, backLp);
+        back.setOnClickListener(v -> showDashboard());
+
+        setContentView(scroll);
+    }
+
+    private EditText makeSecretInput(String hint) {
+        EditText input = makeInput(hint);
+        input.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setTransformationMethod(
+                android.text.method.PasswordTransformationMethod.getInstance());
+        return input;
+    }
+
+    private void addSecretField(LinearLayout root, String label, EditText field) {
+        TextView caption = makeLabel(label, 12, MUTED, true);
+        LinearLayout.LayoutParams captionLp = lp(-1, 34);
+        captionLp.topMargin = dp(8);
+        root.addView(caption, captionLp);
+        root.addView(field, lp(-1, 54));
     }
 
     private void logout() {
