@@ -28,43 +28,38 @@ class DatabaseManager:
         self.engine = self._create_engine()
         
     def _load_config(self, config_path: str) -> dict:
-        """Load database configuration from YAML file."""
+        """Load optional YAML configuration; credentials must come from environment."""
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return yaml.safe_load(f)
+            with open(config_path, "r", encoding="utf-8") as handle:
+                return yaml.safe_load(handle) or {}
         except FileNotFoundError:
-            log.warning(f"Config file not found: {config_path}. Using defaults.")
-            return {
-                'database': {
-                    'type': 'postgresql',
-                    'postgresql': {
-                        'host': 'localhost',
-                        'port': 5432,
-                        'database': 'crash_db',
-                        'user': 'crash_user',
-                        'password': 'crash_password_2025'
-                    }
-                }
-            }
-    
+            return {}
+
     def _create_engine(self):
-        """Create SQLAlchemy engine based on configuration."""
-        db_config = self.config['database']
-        
-        # Priorité aux variables d'environnement Docker
-        pg_config = db_config['postgresql']
-        connection_string = (
-            f"postgresql://{os.getenv('DATABASE_USER', pg_config['user'])}:"
-            f"{os.getenv('DATABASE_PASSWORD', pg_config['password'])}"
-            f"@{os.getenv('DATABASE_HOST', pg_config['host'])}:"
-            f"{os.getenv('DATABASE_PORT', pg_config['port'])}/"
-            f"{os.getenv('DATABASE_NAME', pg_config['database'])}"
+        """Create a PostgreSQL engine from DATABASE_URL or explicit env variables."""
+        from sqlalchemy.engine import URL
+
+        database_url = os.getenv("DATABASE_URL", "").strip()
+        if database_url:
+            return create_engine(database_url, echo=False, pool_pre_ping=True)
+
+        names = ("DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_HOST",
+                 "DATABASE_PORT", "DATABASE_NAME")
+        missing = [name for name in names if not os.getenv(name)]
+        if missing:
+            raise RuntimeError("Missing database environment configuration: " + ", ".join(missing))
+
+        connection_url = URL.create(
+            "postgresql+psycopg2",
+            username=os.environ["DATABASE_USER"],
+            password=os.environ["DATABASE_PASSWORD"],
+            host=os.environ["DATABASE_HOST"],
+            port=int(os.environ["DATABASE_PORT"]),
+            database=os.environ["DATABASE_NAME"],
         )
-        
-        log.info(f"Using PostgreSQL database: {os.getenv('DATABASE_HOST', pg_config['host'])}")
-        
-        return create_engine(connection_string, echo=False)
-    
+        log.info("PostgreSQL connection configured.")
+        return create_engine(connection_url, echo=False, pool_pre_ping=True)
+
     def get_latest_games(self, limit: int = 100) -> pd.DataFrame:
         """
         Retrieve the most recent games.
