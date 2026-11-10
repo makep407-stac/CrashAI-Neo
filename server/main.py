@@ -18,6 +18,7 @@ from neural_engine import select_single_estimate
 from intelligence_engine import analyze_intelligence
 from signal_trace import record_signal_event, signal_trace_status
 from zakaria_bridge import ImportBatch, import_completed_rounds
+from live_result_bridge import subscribe, unsubscribe, broadcast_result, subscriber_count
 from pydantic import BaseModel, Field, field_validator
 
 app = FastAPI(title="CrashAI Neo API", version="0.8.0")
@@ -374,9 +375,46 @@ def get_signal_trace_status(limit: int = 100):
 
 
 @app.post("/external-feed/import")
-def external_feed_import(
+async def external_feed_import(
     payload: ImportBatch,
     x_crashai_ingest_key: str | None = Header(default=None),
 ):
-    """Accept normalized completed-round data from an independently authorized collector."""
-    return import_completed_rounds(payload, x_crashai_ingest_key)
+    """Accept validated completed outcomes and publish them to live mobile clients."""
+    result = import_completed_rounds(payload, x_crashai_ingest_key)
+    for item in result.pop("accepted_rounds", []):
+        await broadcast_result(item["round_id"], item["multiplier"], result["source"])
+    result["live_subscribers"] = subscriber_count()
+    return result
+
+
+@app.websocket("/ws/live-results")
+async def ws_live_results(websocket: WebSocket):
+    """Stream confirmed completed outcomes to the Android live-result sphere."""
+    import asyncio
+    from datetime import datetime, timezone
+    await websocket.accept()
+    await subscribe(websocket)
+    try:
+        # Replay recent completed outcomes first so reconnecting phones catch up.
+        for row in recent_rounds(20):
+            await websocket.send_json({
+                "type": "live_result",
+                "round_id": row["round_id"],
+                "actual_multiplier": round(float(row["multiplier"]), 4),
+                "source": "stored_history",
+                "confirmed": True,
+                "occurred_at": row["recorded_at"],
+                "prediction": None,
+                "note": "Historical completed outcome; not a prediction."
+            })
+        while True:
+            await asyncio.sleep(25)
+            await websocket.send_json({
+                "type": "heartbeat",
+                "server_time": datetime.now(timezone.utc).isoformat(),
+                "live_subscribers": subscriber_count()
+            })
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        unsubscribe(websocket)
