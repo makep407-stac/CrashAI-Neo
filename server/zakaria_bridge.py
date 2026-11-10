@@ -41,14 +41,17 @@ def import_completed_rounds(payload: ImportBatch, supplied_key: str | None):
 
     inserted = 0
     duplicates = 0
+    accepted_rounds = []
     for item in payload.rounds:
         if save_round(item.round_id, item.multiplier):
             inserted += 1
+            accepted_rounds.append({"round_id": item.round_id, "multiplier": item.multiplier})
         else:
             duplicates += 1
 
     return {
         "accepted": inserted,
+        "accepted_rounds": accepted_rounds,
         "duplicates": duplicates,
         "stored_round_count": len(recent_rounds(500)),
         "source": payload.source,
